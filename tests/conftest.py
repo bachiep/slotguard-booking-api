@@ -1,6 +1,6 @@
 """Shared async pytest fixtures with isolated SQLite WAL databases and deterministic clock."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from slotguard.core.clock import MutableClock
 from slotguard.core.config import Settings
 from slotguard.core.database import Base, create_engine_and_sessionmaker
+from slotguard.core.security import create_access_token, hash_password
 from slotguard.main import create_app
+from slotguard.models.user import User, UserRole
 
 
 @pytest.fixture
@@ -80,3 +82,56 @@ async def client(app) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as async_client:
         yield async_client
+
+
+@pytest.fixture
+def user_factory(
+    db_engine_and_session_maker: tuple[AsyncEngine, async_sessionmaker[AsyncSession]],
+    clock: MutableClock,
+) -> Callable[..., Awaitable[User]]:
+    """Create and persist a user with configurable role."""
+    _, session_maker = db_engine_and_session_maker
+
+    async def _create_user(
+        email: str,
+        *,
+        password: str = "StrongPass123!",
+        full_name: str = "Test User",
+        role: UserRole = UserRole.MEMBER,
+        is_active: bool = True,
+    ) -> User:
+        async with session_maker() as session:
+            user = User(
+                email=email.lower().strip(),
+                password_hash=hash_password(password),
+                full_name=full_name,
+                role=role.value,
+                is_active=is_active,
+                created_at=clock.now(),
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+            return user
+
+    return _create_user
+
+
+@pytest.fixture
+def auth_headers_factory(
+    test_settings: Settings,
+    clock: MutableClock,
+) -> Callable[[User], dict[str, str]]:
+    """Generate Authorization headers for a persisted User using the test clock."""
+
+    def _headers(user: User) -> dict[str, str]:
+        token = create_access_token(
+            user_id=user.id,
+            email=user.email,
+            role=user.role,
+            settings=test_settings,
+            clock=clock,
+        )
+        return {"Authorization": f"Bearer {token}"}
+
+    return _headers
