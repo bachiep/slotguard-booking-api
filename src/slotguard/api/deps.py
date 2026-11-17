@@ -1,17 +1,22 @@
-"""Shared FastAPI dependencies for configuration, auth, locks, and RBAC."""
+"""Shared FastAPI dependencies for configuration, auth, locks, rate limits, and RBAC."""
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from slotguard.core.clock import Clock
 from slotguard.core.config import Settings
 from slotguard.core.database import get_db_session
-from slotguard.core.exceptions import ForbiddenError, UnauthorizedError
+from slotguard.core.exceptions import (
+    ForbiddenError,
+    RateLimitExceededError,
+    UnauthorizedError,
+)
 from slotguard.core.locks import ResourceLockManager
+from slotguard.core.rate_limiter import RateLimiter
 from slotguard.core.security import decode_access_token
 from slotguard.models.user import User, UserRole
 from slotguard.repositories.user_repository import UserRepository
@@ -37,6 +42,43 @@ def get_app_clock(request: Request) -> Clock:
 def get_resource_locks(request: Request) -> ResourceLockManager:
     """Retrieve app-scoped ResourceLockManager from FastAPI state."""
     return request.app.state.resource_locks
+
+
+def get_rate_limiter(request: Request) -> RateLimiter:
+    """Retrieve sliding-window RateLimiter from FastAPI state."""
+    return request.app.state.rate_limiter
+
+
+def rate_limit(
+    scope: str,
+    *,
+    limit_getter: Callable[[Settings], int],
+) -> Callable[..., Awaitable[None]]:
+    """Build a FastAPI dependency enforcing a sliding-window rate limit per client IP."""
+
+    async def _enforce(
+        request: Request,
+        response: Response,
+        settings: Annotated[Settings, Depends(get_app_settings)],
+        limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
+    ) -> None:
+        client_host = request.client.host if request.client is not None else "unknown"
+        limit = limit_getter(settings)
+        result = await limiter.check(
+            key=f"{scope}:{client_host}",
+            limit=limit,
+            window_seconds=settings.rate_limit_window_seconds,
+        )
+        response.headers["X-RateLimit-Limit"] = str(result.limit)
+        response.headers["X-RateLimit-Remaining"] = str(result.remaining)
+        if not result.allowed:
+            raise RateLimitExceededError(
+                limit=result.limit,
+                remaining=result.remaining,
+                retry_after_seconds=result.retry_after_seconds,
+            )
+
+    return _enforce
 
 
 async def get_current_user(

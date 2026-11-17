@@ -10,6 +10,7 @@ from slotguard.api.deps import (
     get_app_settings,
     get_current_user,
     get_resource_locks,
+    rate_limit,
 )
 from slotguard.core.clock import Clock
 from slotguard.core.config import Settings
@@ -46,6 +47,9 @@ def _build_booking_service(
     response_model=BookingResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Reserve a time slot (creates 15-minute HOLD)",
+    dependencies=[
+        Depends(rate_limit("bookings_create", limit_getter=lambda s: s.rate_limit_booking_requests))
+    ],
 )
 async def create_booking(
     payload: BookingCreateRequest,

@@ -14,6 +14,8 @@ from slotguard.core.config import Settings, get_settings
 from slotguard.core.database import create_engine_and_sessionmaker
 from slotguard.core.locks import ResourceLockManager
 from slotguard.core.problem_details import register_exception_handlers
+from slotguard.core.rate_limiter import RateLimiter, build_rate_limiter
+from slotguard.workers.maintenance_worker import MaintenanceWorker
 
 
 def _configure_openapi(app: FastAPI) -> None:
@@ -48,11 +50,13 @@ def create_app(
     clock: Clock | None = None,
     engine: AsyncEngine | None = None,
     session_maker: async_sessionmaker[AsyncSession] | None = None,
+    rate_limiter: RateLimiter | None = None,
 ) -> FastAPI:
     """Create and configure a FastAPI application instance."""
     resolved_settings = settings or get_settings()
     resolved_clock = clock or SystemClock()
     lock_manager = ResourceLockManager()
+    resolved_limiter = rate_limiter or build_rate_limiter(resolved_settings, resolved_clock)
 
     owns_engine = engine is None or session_maker is None
     if engine is None or session_maker is None:
@@ -65,6 +69,15 @@ def create_app(
         resolved_engine = engine
         resolved_session_maker = session_maker
 
+    worker: MaintenanceWorker | None = None
+    if resolved_settings.worker_enabled:
+        worker = MaintenanceWorker(
+            session_maker=resolved_session_maker,
+            clock=resolved_clock,
+            lock_manager=lock_manager,
+            poll_interval_seconds=resolved_settings.worker_poll_interval_seconds,
+        )
+
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         application.state.settings = resolved_settings
@@ -72,9 +85,15 @@ def create_app(
         application.state.engine = resolved_engine
         application.state.session_maker = resolved_session_maker
         application.state.resource_locks = lock_manager
+        application.state.rate_limiter = resolved_limiter
+        if worker is not None:
+            worker.start()
         try:
             yield
         finally:
+            if worker is not None:
+                await worker.stop()
+            await resolved_limiter.close()
             if owns_engine:
                 await resolved_engine.dispose()
 
@@ -92,6 +111,7 @@ def create_app(
     application.state.engine = resolved_engine
     application.state.session_maker = resolved_session_maker
     application.state.resource_locks = lock_manager
+    application.state.rate_limiter = resolved_limiter
 
     register_exception_handlers(application, resolved_clock)
     application.include_router(api_v1_router)
