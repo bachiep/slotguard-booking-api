@@ -12,6 +12,7 @@ from slotguard.api.v1.router import api_v1_router
 from slotguard.core.clock import Clock, SystemClock
 from slotguard.core.config import Settings, get_settings
 from slotguard.core.database import create_engine_and_sessionmaker
+from slotguard.core.locks import ResourceLockManager
 from slotguard.core.problem_details import register_exception_handlers
 
 
@@ -51,6 +52,7 @@ def create_app(
     """Create and configure a FastAPI application instance."""
     resolved_settings = settings or get_settings()
     resolved_clock = clock or SystemClock()
+    lock_manager = ResourceLockManager()
 
     owns_engine = engine is None or session_maker is None
     if engine is None or session_maker is None:
@@ -69,6 +71,7 @@ def create_app(
         application.state.clock = resolved_clock
         application.state.engine = resolved_engine
         application.state.session_maker = resolved_session_maker
+        application.state.resource_locks = lock_manager
         try:
             yield
         finally:
@@ -88,6 +91,7 @@ def create_app(
     application.state.clock = resolved_clock
     application.state.engine = resolved_engine
     application.state.session_maker = resolved_session_maker
+    application.state.resource_locks = lock_manager
 
     register_exception_handlers(application, resolved_clock)
     application.include_router(api_v1_router)
