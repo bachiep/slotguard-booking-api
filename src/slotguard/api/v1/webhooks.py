@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from slotguard.api.deps import get_app_clock, get_app_settings, get_resource_locks
+from slotguard.api.deps import get_app_clock, get_app_settings, get_resource_locks, rate_limit
 from slotguard.core.clock import Clock
 from slotguard.core.config import Settings
 from slotguard.core.database import get_db_session
@@ -21,6 +21,11 @@ router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
     response_model=WebhookAckResponse,
     status_code=status.HTTP_200_OK,
     summary="Process payment confirmation webhook (HMAC-SHA256 + idempotent)",
+    dependencies=[
+        Depends(
+            rate_limit("webhooks_payment", limit_getter=lambda s: s.rate_limit_webhook_requests)
+        )
+    ],
     description=(
         "Verifies X-Webhook-Timestamp (300s replay guard) and X-Webhook-Signature "
         "(sha256=HMAC_SHA256(secret, '<timestamp>.<raw_body>')) over raw request bytes, "

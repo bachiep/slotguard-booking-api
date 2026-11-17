@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from slotguard.api.deps import get_app_clock, get_app_settings, get_current_user
+from slotguard.api.deps import get_app_clock, get_app_settings, get_current_user, rate_limit
 from slotguard.core.clock import Clock
 from slotguard.core.config import Settings
 from slotguard.core.database import get_db_session
@@ -51,6 +51,9 @@ async def register(
     response_model=AuthTokenResponse,
     status_code=status.HTTP_200_OK,
     summary="Authenticate user credentials",
+    dependencies=[
+        Depends(rate_limit("auth_login", limit_getter=lambda s: s.rate_limit_auth_requests))
+    ],
 )
 async def login(
     payload: LoginRequest,
