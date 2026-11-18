@@ -2,12 +2,14 @@
 
 > **One-sentence pitch:** An async RESTful resource time-slot booking API built with Python 3.13, FastAPI, and Async SQLAlchemy 2.0 that prevents concurrent double-booking, verifies HMAC-SHA256 payment webhooks idempotently, and protects endpoints with sliding-window rate limiting.
 
+[![CI](https://github.com/bachiep/slotguard-booking-api/actions/workflows/ci.yml/badge.svg)](https://github.com/bachiep/slotguard-booking-api/actions/workflows/ci.yml)
 ![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![SQLAlchemy 2.0](https://img.shields.io/badge/SQLAlchemy-2.0%20Async-D71F00?style=flat-square)
 ![Alembic](https://img.shields.io/badge/Migrations-Alembic-6BA81E?style=flat-square)
 ![PostgreSQL 16](https://img.shields.io/badge/Database-SQLite%20WAL%20%2F%20PostgreSQL%2016-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Redis 7](https://img.shields.io/badge/Rate%20Limit-Memory%20%2F%20Redis%207-DC382D?style=flat-square&logo=redis&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
@@ -161,6 +163,15 @@ r = httpx.post('http://localhost:8102/api/v1/webhooks/payment', content=body, he
 print(r.status_code, r.json())
 "
 ```
+
+### Interactive API Preview & 1-Click Collections
+
+- **VS Code / IntelliJ HTTP Client:** [`docs/api-requests.http`](docs/api-requests.http)
+- **Postman Collection v2.1:** [`docs/postman_collection.json`](docs/postman_collection.json) (includes pre-request CryptoJS HMAC-SHA256 webhook signature generator)
+
+| Live OpenAPI & Health Probe (`GET /api/v1/health`) | Bookings & HMAC-SHA256 Webhook (`POST /webhooks/payment`) |
+| :---: | :---: |
+| ![OpenAPI Health Overview](docs/screenshots/openapi-overview.png) | ![OpenAPI Bookings & Webhooks](docs/screenshots/openapi-bookings-webhooks.png) |
 
 ---
 
