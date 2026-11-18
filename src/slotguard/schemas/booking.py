@@ -22,6 +22,21 @@ class BookingCreateRequest(BaseModel):
         return self
 
 
+class BookingRescheduleRequest(BaseModel):
+    """Payload to reschedule an active booking to a new [start_time, end_time) UTC slot."""
+
+    start_time: datetime
+    end_time: datetime
+
+    @model_validator(mode="after")
+    def validate_interval(self) -> "BookingRescheduleRequest":
+        if self.start_time.tzinfo is None or self.end_time.tzinfo is None:
+            raise ValueError("start_time and end_time must include explicit UTC timezone offsets.")
+        if self.start_time >= self.end_time:
+            raise ValueError("start_time must be strictly earlier than end_time.")
+        return self
+
+
 class BookingResponse(BaseModel):
     """Representation of a booking reservation."""
 

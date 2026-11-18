@@ -138,9 +138,12 @@ Assigned Docker host ports:
 | Resources | `POST /api/v1/resources`, `PATCH /api/v1/resources/{id}` | `OWNER` | Create and update bookable resources |
 | Bookings | `POST /api/v1/bookings` | Authenticated | Rate-limited slot reservation creating a 15-minute `HOLD` |
 | Bookings | `GET /api/v1/bookings`, `GET /api/v1/bookings/{id}` | Owner / Creator | Paginated booking list and detail inspection |
+| Bookings | `POST /api/v1/bookings/{id}/reschedule` | Owner / Creator | Atomically reschedule active `HOLD` or `CONFIRMED` booking to a new window |
+| Bookings | `GET /api/v1/bookings/{id}/ics` | Owner / Creator | Export booking as compliant RFC-5545 `.ics` iCalendar file download |
 | Bookings | `POST /api/v1/bookings/{id}/cancel` | Owner / Creator | Cancel active `HOLD` or `CONFIRMED` booking before `start_time` |
 | Webhooks | `POST /api/v1/webhooks/payment` | HMAC-SHA256 | Verify raw signature + 300s timestamp, confirm `HOLD`, enqueue outbox row |
 | Webhooks | `POST /api/v1/webhooks/demo-sign` | Non-Prod Only | Sign serialized JSON payload server-side (`403` RFC 7807 in `production`) |
+| Observability | `POST /api/v1/ops/run-maintenance` | Non-Prod Only | Trigger on-demand hold-expiry & outbox delivery sweep (`403` in `production`) |
 
 ---
 
@@ -203,7 +206,7 @@ print(r.status_code, r.json())
 | **Distinct-Slot Throughput** | `60` concurrent `POST /bookings` | `60 x 201 HOLD` across `5` resources | **31.2 req/s** | `1008.7` / `1715.53` / `1795.15 ms` |
 | **Identical Webhook Replays** | `30` concurrent `POST /webhooks/payment` | `30 x 200 OK` (`1 processed`, `29 already_processed`, `1` outbox row) | **37.4 req/s** | `481.36` / `729.23` / `733.22 ms` |
 
-### Measured Verification Summary (`36` Tests Passing, `0` Failures, `0` Skipped)
+### Measured Verification Summary (`54` Tests Passing, `0` Failures, `0` Skipped, `>= 80%` Coverage Gate)
 
 | Test Suite | Tests | What It Verifies |
 | :--- | :---: | :--- |
@@ -215,6 +218,7 @@ print(r.status_code, r.json())
 | `tests/test_rate_limit_and_worker.py` | 4 | Sliding-window unit & `/login` `429 Retry-After` + `MutableClock` recovery, hold-expiry worker freeing expired slots for re-booking, outbox `SENT` and 3-attempt `FAILED` handling |
 | `tests/test_seed_and_migrations.py` | 2 | Idempotent `scripts.seed_demo` execution and fresh-DB `alembic upgrade head` schema/index verification |
 | `tests/test_v2_ops_and_observability.py` | 9 | `X-Request-Id` / `X-Response-Time-Ms` correlation, structured log binding, `ProblemDetail.request_id`, thread-safe `SlotGuardMetrics` & `/metrics/summary`, `/outbox/recent`, `/webhooks/demo-sign` non-prod & `403` production guard, slot status availability, and `GET /` console hygiene |
+| `tests/test_v21_features.py` | 18 | Atomic booking reschedule (self-overlap non-conflict, 409 conflict, cancelled/expired 409, RBAC 403), RFC-5545 `.ics` export (CRLF termination, sanitized headers, RBAC), on-demand maintenance sweep (`/api/v1/ops/run-maintenance`, slot release, production 403 guard), OpenAPI v2.1 schemas, booking listing & detail, resource update invariants, auth edge cases, and background worker lifecycle |
 
 ---
 
@@ -297,6 +301,7 @@ print(r.status_code, r.json())
 │   ├── test_resources.py
 │   ├── test_seed_and_migrations.py
 │   ├── test_v2_ops_and_observability.py
+│   ├── test_v21_features.py
 │   └── test_webhooks.py
 ├── alembic.ini
 ├── docker-compose.yml

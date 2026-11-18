@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from slotguard.api.deps import (
@@ -23,6 +23,7 @@ from slotguard.models.booking import BookingStatus
 from slotguard.models.user import User
 from slotguard.schemas.booking import (
     BookingCreateRequest,
+    BookingRescheduleRequest,
     BookingResponse,
     PaginatedBookingsResponse,
 )
@@ -148,3 +149,71 @@ async def cancel_booking(
     return await _build_booking_service(
         session, settings, clock, lock_manager, metrics
     ).cancel_booking(booking_id, current_user)
+
+
+@router.post(
+    "/{booking_id}/reschedule",
+    response_model=BookingResponse,
+    summary="Reschedule an active booking",
+    responses={
+        200: {"model": BookingResponse, "description": "Booking rescheduled successfully"},
+        401: {"model": ProblemDetail, "description": "Missing or invalid Bearer token"},
+        403: {"model": ProblemDetail, "description": "Not authorized to reschedule this booking"},
+        404: {"model": ProblemDetail, "description": "Booking not found"},
+        409: {
+            "model": ProblemDetail,
+            "description": "Time slot overlap or non-active booking status",
+        },
+        422: {
+            "model": ProblemDetail,
+            "description": "Invalid time window or operating hours violation",
+        },
+    },
+)
+async def reschedule_booking(
+    booking_id: int,
+    payload: BookingRescheduleRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    clock: Annotated[Clock, Depends(get_app_clock)],
+    lock_manager: Annotated[ResourceLockManager, Depends(get_resource_locks)],
+    metrics: Annotated[SlotGuardMetrics, Depends(get_metrics)],
+) -> BookingResponse:
+    """Atomically reschedule an active HOLD or CONFIRMED booking to a new time window."""
+    return await _build_booking_service(
+        session, settings, clock, lock_manager, metrics
+    ).reschedule_booking(booking_id, current_user, payload)
+
+
+@router.get(
+    "/{booking_id}/ics",
+    summary="Export booking as RFC-5545 iCalendar file",
+    responses={
+        200: {
+            "content": {"text/calendar": {}},
+            "description": "RFC-5545 .ics calendar event file download",
+        },
+        401: {"model": ProblemDetail, "description": "Missing or invalid Bearer token"},
+        403: {"model": ProblemDetail, "description": "Not authorized to export this booking"},
+        404: {"model": ProblemDetail, "description": "Booking not found"},
+    },
+)
+async def export_booking_ics(
+    booking_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    clock: Annotated[Clock, Depends(get_app_clock)],
+    lock_manager: Annotated[ResourceLockManager, Depends(get_resource_locks)],
+    metrics: Annotated[SlotGuardMetrics, Depends(get_metrics)],
+) -> Response:
+    """Generate and download an RFC-5545 .ics iCalendar file for this booking."""
+    body, filename = await _build_booking_service(
+        session, settings, clock, lock_manager, metrics
+    ).export_booking_ics(booking_id, current_user)
+    return Response(
+        content=body,
+        media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

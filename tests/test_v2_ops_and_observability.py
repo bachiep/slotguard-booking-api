@@ -190,7 +190,7 @@ async def test_metrics_summary_tracks_bookings_conflicts_webhooks_rate_limits_an
     assert summary_resp.status_code == 200
     summary = summary_resp.json()
 
-    assert summary["version"] == "2.0.0"
+    assert summary["version"] == "2.1.0"
     assert summary["requests"]["total"] >= 11
     assert summary["requests"]["status_2xx"] >= 8
     assert summary["requests"]["status_4xx"] >= 3
@@ -423,7 +423,7 @@ async def test_root_console_serves_html_without_secrets(
     assert resp.headers["content-type"].startswith("text/html")
     assert resp.headers["X-Request-Id"] == "ui-console-1"
     assert float(resp.headers["X-Response-Time-Ms"]) >= 0.0
-    assert "SlotGuard v2.0.0 — Timeline &amp; Concurrency Lab" in resp.text
+    assert "SlotGuard v2.1.0 — Timeline &amp; Concurrency Lab" in resp.text
     assert test_settings.webhook_secret not in resp.text
     assert test_settings.jwt_secret not in resp.text
 

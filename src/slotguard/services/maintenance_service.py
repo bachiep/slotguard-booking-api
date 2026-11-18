@@ -133,10 +133,11 @@ class MaintenanceService:
             self._metrics.record_holds_expired(expired_count)
         return expired_count
 
-    async def process_pending_outbox(self, *, batch_size: int = 50) -> int:
-        """Dispatch PENDING outbox notifications and record SENT or FAILED state."""
+    async def process_pending_outbox_with_stats(self, *, batch_size: int = 50) -> tuple[int, int]:
+        """Dispatch PENDING outbox notifications, returning (sent_count, failed_count)."""
         pending = await self._outbox.list_pending(limit=batch_size)
         sent_count = 0
+        failed_count = 0
 
         for item in pending:
             try:
@@ -149,6 +150,7 @@ class MaintenanceService:
                 await self._session.commit()
                 if self._metrics is not None:
                     self._metrics.record_outbox_failed()
+                failed_count += 1
                 continue
 
             item.attempts += 1
@@ -159,4 +161,19 @@ class MaintenanceService:
 
         if self._metrics is not None and sent_count > 0:
             self._metrics.record_outbox_processed(sent_count)
+        return sent_count, failed_count
+
+    async def process_pending_outbox(self, *, batch_size: int = 50) -> int:
+        """Dispatch PENDING outbox notifications and record SENT or FAILED state."""
+        sent_count, _ = await self.process_pending_outbox_with_stats(batch_size=batch_size)
         return sent_count
+
+    async def run_cycle(self, *, batch_size: int = 50) -> dict[str, int]:
+        """Run one full maintenance cycle: expire overdue holds and dispatch pending outbox."""
+        expired = await self.expire_stale_holds(batch_size=batch_size)
+        sent, failed = await self.process_pending_outbox_with_stats(batch_size=batch_size)
+        return {
+            "expired_holds": expired,
+            "outbox_sent": sent,
+            "outbox_failed": failed,
+        }

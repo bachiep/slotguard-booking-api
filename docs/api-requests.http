@@ -114,3 +114,20 @@ GET {{baseUrl}}/api/v1/metrics/summary
 
 ### 13. Inspect Recent Transactional Outbox Rows
 GET {{baseUrl}}/api/v1/outbox/recent?limit=10
+
+### 14. Reschedule Active Booking (v2.1 Atomic Shift)
+POST {{baseUrl}}/api/v1/bookings/{{bookingId}}/reschedule
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "start_time": "2026-12-10T16:00:00Z",
+  "end_time": "2026-12-10T17:00:00Z"
+}
+
+### 15. Export RFC-5545 iCalendar (.ics) File (v2.1)
+GET {{baseUrl}}/api/v1/bookings/{{bookingId}}/ics
+Authorization: Bearer {{memberToken}}
+
+### 16. Trigger On-Demand Hold-Expiry & Outbox Maintenance Sweep (v2.1 Non-Prod Only)
+POST {{baseUrl}}/api/v1/ops/run-maintenance
