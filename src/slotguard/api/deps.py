@@ -16,6 +16,7 @@ from slotguard.core.exceptions import (
     UnauthorizedError,
 )
 from slotguard.core.locks import ResourceLockManager
+from slotguard.core.metrics import SlotGuardMetrics
 from slotguard.core.rate_limiter import RateLimiter
 from slotguard.core.security import decode_access_token
 from slotguard.models.user import User, UserRole
@@ -49,6 +50,11 @@ def get_rate_limiter(request: Request) -> RateLimiter:
     return request.app.state.rate_limiter
 
 
+def get_metrics(request: Request) -> SlotGuardMetrics:
+    """Retrieve app-scoped SlotGuardMetrics collector from FastAPI state."""
+    return request.app.state.metrics
+
+
 def rate_limit(
     scope: str,
     *,
@@ -61,6 +67,7 @@ def rate_limit(
         response: Response,
         settings: Annotated[Settings, Depends(get_app_settings)],
         limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
+        metrics: Annotated[SlotGuardMetrics, Depends(get_metrics)],
     ) -> None:
         client_host = request.client.host if request.client is not None else "unknown"
         limit = limit_getter(settings)
@@ -72,6 +79,7 @@ def rate_limit(
         response.headers["X-RateLimit-Limit"] = str(result.limit)
         response.headers["X-RateLimit-Remaining"] = str(result.remaining)
         if not result.allowed:
+            metrics.record_rate_limit_hit()
             raise RateLimitExceededError(
                 limit=result.limit,
                 remaining=result.remaining,

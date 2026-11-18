@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from slotguard.core.clock import Clock
 from slotguard.core.locks import ResourceLockManager
+from slotguard.core.metrics import SlotGuardMetrics
 from slotguard.models.booking import Booking, BookingStatus
 from slotguard.models.webhook import (
     NotificationType,
@@ -52,11 +53,13 @@ class MaintenanceService:
         clock: Clock,
         lock_manager: ResourceLockManager,
         sender: NotificationSender | None = None,
+        metrics: SlotGuardMetrics | None = None,
     ) -> None:
         self._session = session
         self._clock = clock
         self._lock_manager = lock_manager
         self._sender = sender or LoggingNotificationSender()
+        self._metrics = metrics
         self._users = UserRepository(session)
         self._outbox = OutboxRepository(session)
 
@@ -126,6 +129,8 @@ class MaintenanceService:
                 await self._session.commit()
                 expired_count += 1
 
+        if self._metrics is not None and expired_count > 0:
+            self._metrics.record_holds_expired(expired_count)
         return expired_count
 
     async def process_pending_outbox(self, *, batch_size: int = 50) -> int:
@@ -142,6 +147,8 @@ class MaintenanceService:
                 if item.attempts >= 3:
                     item.status = OutboxNotificationStatus.FAILED.value
                 await self._session.commit()
+                if self._metrics is not None:
+                    self._metrics.record_outbox_failed()
                 continue
 
             item.attempts += 1
@@ -150,4 +157,6 @@ class MaintenanceService:
             await self._session.commit()
             sent_count += 1
 
+        if self._metrics is not None and sent_count > 0:
+            self._metrics.record_outbox_processed(sent_count)
         return sent_count

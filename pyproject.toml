@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "slotguard-booking-api"
-version = "0.1.0"
+version = "2.0.0"
 description = "Async resource time-slot booking REST API with double-booking prevention, HMAC-SHA256 idempotent payment webhooks, and sliding-window rate limiting."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -33,6 +33,9 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+slotguard = ["static/*.html"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
 testpaths = ["tests"]
@@ -42,7 +45,7 @@ asyncio_default_fixture_loop_scope = "function"
 [tool.ruff]
 line-length = 100
 target-version = "py313"
-src = ["src", "tests", "scripts", "alembic"]
+src = ["src", "tests", "scripts", "alembic", "benchmarks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

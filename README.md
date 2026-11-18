@@ -1,6 +1,6 @@
 # SlotGuard Booking API
 
-> **One-sentence pitch:** An async RESTful resource time-slot booking API built with Python 3.13, FastAPI, and Async SQLAlchemy 2.0 that prevents concurrent double-booking, verifies HMAC-SHA256 payment webhooks idempotently, and protects endpoints with sliding-window rate limiting.
+> **One-sentence pitch:** An async RESTful resource time-slot booking API built with Python 3.13, FastAPI, and Async SQLAlchemy 2.0 featuring serialized double-booking prevention, HMAC-SHA256 idempotent payment webhooks, sliding-window rate limiting, live telemetry, and an interactive Timeline & Concurrency Lab console.
 
 [![CI](https://github.com/bachiep/slotguard-booking-api/actions/workflows/ci.yml/badge.svg)](https://github.com/bachiep/slotguard-booking-api/actions/workflows/ci.yml)
 ![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?style=flat-square&logo=python&logoColor=white)
@@ -27,10 +27,11 @@
 
 ```mermaid
 flowchart LR
-    Client["Client / Gateway / Swagger UI"] --> RateLimit["Sliding-Window Rate Limiter<br/>In-Memory (local) | Redis Lua (docker)"]
+    Client["Client / Gateway / Timeline Console (GET /)"] --> Middleware["RequestContextMiddleware<br/>(X-Request-Id, X-Response-Time-Ms, SlotGuardMetrics)"]
+    Middleware --> RateLimit["Sliding-Window Rate Limiter<br/>In-Memory (local) | Redis Lua (docker)"]
     RateLimit --> Router["FastAPI Routers (/api/v1)<br/>Pydantic v2 + RFC 7807 ProblemDetail"]
     Router --> Security["JWT / Argon2id RBAC<br/>& Raw-Body HMAC-SHA256 Verifier"]
-    Security --> Services["Domain Services<br/>(Auth, Resource, Booking, Webhook)"]
+    Security --> Services["Domain Services<br/>(Auth, Resource, Booking, Webhook, Ops)"]
     Services --> Lock["ResourceLockManager<br/>(asyncio.Lock + PG FOR UPDATE)"]
     Services --> DB[("SQLite WAL (local/CI)<br/>PostgreSQL 16 (docker)")]
     Worker["MaintenanceWorker<br/>(Hold Expiry & Outbox Dispatch)"] --> DB
@@ -59,6 +60,10 @@ stateDiagram-v2
   - See [auth_service.py](src/slotguard/services/auth_service.py) and [security.py](src/slotguard/core/security.py).
 - **Deterministic Clock & Race-Safe Hold-Expiry Worker (`MaintenanceService`):** Injects a `Clock` protocol (`SystemClock` / `MutableClock`) across JWT issuance, hold TTLs, rate limits, and webhook replay windows so multi-minute expiration flows run deterministically without `sleep`.
   - See [maintenance_service.py](src/slotguard/services/maintenance_service.py) and [clock.py](src/slotguard/core/clock.py).
+- **Request Correlation & Live Telemetry (`RequestContextMiddleware` & `SlotGuardMetrics`):** Generates or propagates `X-Request-Id`, emits `X-Response-Time-Ms` headers, binds `request_id` into structured logs and RFC 7807 `ProblemDetail` errors, and tracks thread/async-safe request, conflict, webhook, rate-limit, outbox, and rolling p50/p95 latencies exposed at `GET /api/v1/metrics/summary`.
+  - See [middleware.py](src/slotguard/core/middleware.py), [metrics.py](src/slotguard/core/metrics.py), and [ops.py](src/slotguard/api/v1/ops.py).
+- **Timeline & Concurrency Lab Console (`GET /`), Outbox Inspector & Non-Prod Demo Signer:** Serves a self-contained dark-slate operations console at `GET /` with 1-click demo auth, hourly availability timeline, a 25-request simultaneous slot race burst runner, server-side HMAC demo signing (`POST /api/v1/webhooks/demo-sign`, disabled with `403` in `production`), 3x idempotent webhook replay verification, and live `GET /api/v1/outbox/recent` feed.
+  - See [index.html](src/slotguard/static/index.html) and [webhooks.py](src/slotguard/api/v1/webhooks.py).
 
 ---
 
@@ -108,10 +113,11 @@ Assigned Docker host ports:
 - **PostgreSQL 16:** `localhost:5432` -> container `5432`
 - **Redis 7:** `localhost:6382` -> container `6379`
 
-### Interactive Docs & Seeded Demo Credentials
+### Interactive Consoles, Docs & Seeded Demo Credentials
 
-- **Swagger UI:** `http://localhost:8102/docs`
-- **Health Endpoint:** `http://localhost:8102/api/v1/health`
+- **Timeline & Concurrency Lab Console:** `http://localhost:8102/`
+- **Swagger UI (OpenAPI):** `http://localhost:8102/docs`
+- **Health & Telemetry:** `http://localhost:8102/api/v1/health` · `http://localhost:8102/api/v1/metrics/summary`
 - **Seeded Accounts (`scripts/seed_demo.py`):**
   - Owner (`OWNER`): `owner@slotguard.dev` / `Owner@1234`
   - Member (`MEMBER`): `member@slotguard.dev` / `Member@1234`
@@ -121,16 +127,20 @@ Assigned Docker host ports:
 
 | Module | Method & Path | Access | Description |
 | :--- | :--- | :--- | :--- |
+| Console | `GET /` | Public | Dark-slate Timeline & Concurrency Lab web console |
 | Health | `GET /api/v1/health` | Public | Executes `SELECT 1` and returns DB dialect, rate-limit backend, and UTC time |
+| Observability | `GET /api/v1/metrics/summary` | Public | Live request, status-class, latency (p50/p95), conflict, webhook, and outbox telemetry |
+| Observability | `GET /api/v1/outbox/recent` | Public | Newest transactional outbox rows with sanitized non-secret payload summaries |
 | Auth | `POST /api/v1/auth/register`, `/login`, `/refresh`, `/logout` | Public | Member signup, rate-limited login, token rotation + reuse revocation |
 | Auth | `GET /api/v1/auth/me` | Authenticated | Current authenticated user profile |
 | Resources | `GET /api/v1/resources`, `GET /api/v1/resources/{id}` | Public | Paginated filtered resource catalog & details |
-| Resources | `GET /api/v1/resources/{id}/availability?date=YYYY-MM-DD` | Public | Daily discrete slot availability backed by composite SQL index |
+| Resources | `GET /api/v1/resources/{id}/availability?date=YYYY-MM-DD` | Public | Daily discrete slots (`FREE`/`HOLD`/`CONFIRMED`/`PAST`) backed by composite SQL index |
 | Resources | `POST /api/v1/resources`, `PATCH /api/v1/resources/{id}` | `OWNER` | Create and update bookable resources |
 | Bookings | `POST /api/v1/bookings` | Authenticated | Rate-limited slot reservation creating a 15-minute `HOLD` |
 | Bookings | `GET /api/v1/bookings`, `GET /api/v1/bookings/{id}` | Owner / Creator | Paginated booking list and detail inspection |
 | Bookings | `POST /api/v1/bookings/{id}/cancel` | Owner / Creator | Cancel active `HOLD` or `CONFIRMED` booking before `start_time` |
 | Webhooks | `POST /api/v1/webhooks/payment` | HMAC-SHA256 | Verify raw signature + 300s timestamp, confirm `HOLD`, enqueue outbox row |
+| Webhooks | `POST /api/v1/webhooks/demo-sign` | Non-Prod Only | Sign serialized JSON payload server-side (`403` RFC 7807 in `production`) |
 
 ---
 
@@ -169,22 +179,31 @@ print(r.status_code, r.json())
 - **VS Code / IntelliJ HTTP Client:** [`docs/api-requests.http`](docs/api-requests.http)
 - **Postman Collection v2.1:** [`docs/postman_collection.json`](docs/postman_collection.json) (includes pre-request CryptoJS HMAC-SHA256 webhook signature generator)
 
-| Live OpenAPI & Health Probe (`GET /api/v1/health`) | Bookings & HMAC-SHA256 Webhook (`POST /webhooks/payment`) |
-| :---: | :---: |
-| ![OpenAPI Health Overview](docs/screenshots/openapi-overview.png) | ![OpenAPI Bookings & Webhooks](docs/screenshots/openapi-bookings-webhooks.png) |
+| Timeline & 25-Request Race Burst (`GET /`) | HMAC-SHA256 Signer, 3x Replay & Outbox Feed | Live OpenAPI & Health Probe (`/docs`) |
+| :---: | :---: | :---: |
+| ![Timeline & Race Burst Console](docs/screenshots/ops-timeline-concurrency.png) | ![Webhook Simulator & Outbox Feed](docs/screenshots/ops-webhook-outbox.png) | ![OpenAPI Health Overview](docs/screenshots/openapi-overview.png) |
 
 ---
 
-## 6. Testing & Verification
+## 6. Testing, Benchmarks & Verification
 
 ```bash
 .\.venv\Scripts\ruff check .
 .\.venv\Scripts\ruff format --check .
 .\.venv\Scripts\alembic upgrade head
 .\.venv\Scripts\pytest -v
+.\.venv\Scripts\python benchmarks/run_load_benchmark.py
 ```
 
-### Measured Verification Summary (`27` Tests Passing, `0` Failures, `0` Skipped)
+### Measured Load & Concurrency Benchmark Summary ([`docs/BENCHMARK.md`](docs/BENCHMARK.md))
+
+| Scenario | Concurrency | Outcomes | Throughput | Client p50 / p95 / p99 |
+| :--- | :---: | :--- | :---: | :---: |
+| **Double-Booking Race Burst** | `100` concurrent `POST /bookings` | `1 x 201 HOLD`, `99 x 409 Conflict` (`0` double-bookings) | **59.1 req/s** | `933.53` / `1475.97` / `1595.2 ms` |
+| **Distinct-Slot Throughput** | `60` concurrent `POST /bookings` | `60 x 201 HOLD` across `5` resources | **31.2 req/s** | `1008.7` / `1715.53` / `1795.15 ms` |
+| **Identical Webhook Replays** | `30` concurrent `POST /webhooks/payment` | `30 x 200 OK` (`1 processed`, `29 already_processed`, `1` outbox row) | **37.4 req/s** | `481.36` / `729.23` / `733.22 ms` |
+
+### Measured Verification Summary (`36` Tests Passing, `0` Failures, `0` Skipped)
 
 | Test Suite | Tests | What It Verifies |
 | :--- | :---: | :--- |
@@ -195,6 +214,7 @@ print(r.status_code, r.json())
 | `tests/test_webhooks.py` | 3 | Forged/tampered raw-byte signature `401`, >300s replay timestamp `401`, 3x replay idempotency (`1` confirmation, `1` outbox row), 5x concurrent duplicate webhook deliveries, payload conflict `409` |
 | `tests/test_rate_limit_and_worker.py` | 4 | Sliding-window unit & `/login` `429 Retry-After` + `MutableClock` recovery, hold-expiry worker freeing expired slots for re-booking, outbox `SENT` and 3-attempt `FAILED` handling |
 | `tests/test_seed_and_migrations.py` | 2 | Idempotent `scripts.seed_demo` execution and fresh-DB `alembic upgrade head` schema/index verification |
+| `tests/test_v2_ops_and_observability.py` | 9 | `X-Request-Id` / `X-Response-Time-Ms` correlation, structured log binding, `ProblemDetail.request_id`, thread-safe `SlotGuardMetrics` & `/metrics/summary`, `/outbox/recent`, `/webhooks/demo-sign` non-prod & `403` production guard, slot status availability, and `GET /` console hygiene |
 
 ---
 
@@ -208,6 +228,12 @@ print(r.status_code, r.json())
 │       ├── 0002_auth_tables.py
 │       ├── 0003_resources_and_bookings.py
 │       └── 0004_webhooks_and_outbox.py
+├── benchmarks/
+│   └── run_load_benchmark.py
+├── docs/
+│   ├── BENCHMARK.md
+│   ├── api-requests.http
+│   └── postman_collection.json
 ├── scripts/
 │   └── seed_demo.py
 ├── src/slotguard/
@@ -217,6 +243,7 @@ print(r.status_code, r.json())
 │   │       ├── auth.py
 │   │       ├── bookings.py
 │   │       ├── health.py
+│   │       ├── ops.py
 │   │       ├── resources.py
 │   │       ├── router.py
 │   │       └── webhooks.py
@@ -226,6 +253,8 @@ print(r.status_code, r.json())
 │   │   ├── database.py
 │   │   ├── exceptions.py
 │   │   ├── locks.py
+│   │   ├── metrics.py
+│   │   ├── middleware.py
 │   │   ├── problem_details.py
 │   │   ├── rate_limiter.py
 │   │   ├── security.py
@@ -245,6 +274,7 @@ print(r.status_code, r.json())
 │   ├── schemas/
 │   │   ├── auth.py
 │   │   ├── booking.py
+│   │   ├── ops.py
 │   │   ├── resource.py
 │   │   └── webhook.py
 │   ├── services/
@@ -253,6 +283,8 @@ print(r.status_code, r.json())
 │   │   ├── maintenance_service.py
 │   │   ├── resource_service.py
 │   │   └── webhook_service.py
+│   ├── static/
+│   │   └── index.html
 │   ├── workers/
 │   │   └── maintenance_worker.py
 │   └── main.py
@@ -264,6 +296,7 @@ print(r.status_code, r.json())
 │   ├── test_rate_limit_and_worker.py
 │   ├── test_resources.py
 │   ├── test_seed_and_migrations.py
+│   ├── test_v2_ops_and_observability.py
 │   └── test_webhooks.py
 ├── alembic.ini
 ├── docker-compose.yml

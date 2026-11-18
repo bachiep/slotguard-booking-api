@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from slotguard.core.clock import Clock
 from slotguard.core.locks import ResourceLockManager
+from slotguard.core.metrics import SlotGuardMetrics
 from slotguard.services.maintenance_service import MaintenanceService
 
 logger = logging.getLogger(__name__)
@@ -23,11 +24,13 @@ class MaintenanceWorker:
         clock: Clock,
         lock_manager: ResourceLockManager,
         poll_interval_seconds: int = 30,
+        metrics: SlotGuardMetrics | None = None,
     ) -> None:
         self._session_maker = session_maker
         self._clock = clock
         self._lock_manager = lock_manager
         self._poll_interval_seconds = poll_interval_seconds
+        self._metrics = metrics
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
 
@@ -38,6 +41,7 @@ class MaintenanceWorker:
                 session=session,
                 clock=self._clock,
                 lock_manager=self._lock_manager,
+                metrics=self._metrics,
             )
             expired = await service.expire_stale_holds()
             sent = await service.process_pending_outbox()

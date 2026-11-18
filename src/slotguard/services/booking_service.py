@@ -13,6 +13,7 @@ from slotguard.core.exceptions import (
     NotFoundError,
 )
 from slotguard.core.locks import ResourceLockManager
+from slotguard.core.metrics import SlotGuardMetrics
 from slotguard.models.booking import Booking, BookingStatus
 from slotguard.models.resource import Resource
 from slotguard.models.user import User, UserRole
@@ -35,11 +36,13 @@ class BookingService:
         settings: Settings,
         clock: Clock,
         lock_manager: ResourceLockManager,
+        metrics: SlotGuardMetrics | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
         self._clock = clock
         self._lock_manager = lock_manager
+        self._metrics = metrics
         self._bookings = BookingRepository(session)
 
     @staticmethod
@@ -102,6 +105,8 @@ class BookingService:
                 start_time=start_time,
                 end_time=end_time,
             ):
+                if self._metrics is not None:
+                    self._metrics.record_booking_conflict()
                 raise ConflictError("Requested time slot overlaps an existing active booking.")
 
             total_price_cents = (resource.hourly_rate_cents * duration_minutes) // 60
@@ -119,6 +124,8 @@ class BookingService:
             )
             await self._bookings.create(booking)
             await self._session.commit()
+            if self._metrics is not None:
+                self._metrics.record_hold_created()
             return BookingResponse.model_validate(booking)
 
     async def list_bookings(
@@ -177,4 +184,6 @@ class BookingService:
             fresh.cancelled_at = now
             fresh.updated_at = now
             await self._session.commit()
+            if self._metrics is not None:
+                self._metrics.record_booking_cancelled()
             return BookingResponse.model_validate(fresh)

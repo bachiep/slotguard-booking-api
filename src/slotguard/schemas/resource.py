@@ -1,6 +1,7 @@
 """Pydantic schemas for resource management and daily slot availability."""
 
 from datetime import date, datetime, time
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -88,11 +89,13 @@ class PaginatedResourcesResponse(BaseModel):
 
 
 class AvailabilitySlotResponse(BaseModel):
-    """A discrete half-open UTC slot [start_time, end_time) with availability flag."""
+    """A discrete half-open UTC slot [start_time, end_time) with availability state."""
 
     start_time: datetime
     end_time: datetime
     available: bool
+    status: Literal["FREE", "HOLD", "CONFIRMED", "PAST"]
+    booking_id: int | None = None
 
 
 class ResourceAvailabilityResponse(BaseModel):

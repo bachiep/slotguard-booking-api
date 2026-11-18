@@ -103,3 +103,9 @@ class BookingRepository:
         )
         items = list((await self._session.execute(stmt)).scalars().all())
         return items, total
+
+    async def count_by_status(self) -> dict[str, int]:
+        """Return persisted booking counts grouped by status."""
+        stmt = select(Booking.status, func.count(Booking.id)).group_by(Booking.status)
+        rows = (await self._session.execute(stmt)).all()
+        return {str(status_value): int(count) for status_value, count in rows}

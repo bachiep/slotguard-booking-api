@@ -181,6 +181,47 @@
         "header": [{ "key": "Authorization", "value": "Bearer {{memberToken}}" }],
         "url": "{{baseUrl}}/api/v1/bookings/{{bookingId}}/cancel"
       }
+    },
+    {
+      "name": "10. Non-Prod Webhook Demo Signer",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  pm.collectionVariables.set('webhookTs', String(data.timestamp));",
+              "  pm.collectionVariables.set('webhookSig', String(data.signature));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"booking_id\": {{bookingId}},\n  \"provider\": \"payos\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/webhooks/demo-sign"
+      }
+    },
+    {
+      "name": "11. Runtime Telemetry Metrics Summary",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/metrics/summary"
+      }
+    },
+    {
+      "name": "12. Recent Transactional Outbox Feed",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/outbox/recent?limit=15"
+      }
     }
   ]
 }
