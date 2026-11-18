@@ -3,6 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,6 +47,26 @@ class Settings(BaseSettings):
     def environment(self) -> str:
         """Expose normalized environment alias for runtime guards."""
         return self.app_env
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        """Fail fast when production runs with placeholder or undersized secrets."""
+        if self.app_env.strip().lower() != "production":
+            return self
+        for field_name, secret_val in (
+            ("JWT_SECRET", self.jwt_secret),
+            ("WEBHOOK_SECRET", self.webhook_secret),
+        ):
+            normalized = secret_val.strip().lower()
+            if (
+                len(secret_val.encode("utf-8")) < 32
+                or normalized.startswith("dev-only-")
+                or normalized.startswith("change-me")
+            ):
+                raise ValueError(
+                    f"Production environment requires a non-default {field_name} (>= 32 bytes)."
+                )
+        return self
 
 
 @lru_cache
