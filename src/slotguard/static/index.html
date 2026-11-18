@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SlotGuard v2.0.0 — Timeline &amp; Concurrency Lab</title>
+  <title>SlotGuard v2.1.0 — Timeline &amp; Concurrency Lab</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -724,7 +724,7 @@
             </svg>
           </div>
           <div>
-            <h1 class="brand-title">SlotGuard v2.0.0 — Timeline &amp; Concurrency Lab</h1>
+            <h1 class="brand-title">SlotGuard v2.1.0 — Timeline &amp; Concurrency Lab</h1>
             <p class="brand-sub" id="healthSummaryText">Connecting to API telemetry...</p>
           </div>
         </div>
@@ -1022,8 +1022,20 @@
                 <div class="card-subtitle">Live GET /api/v1/outbox/recent + X-RateLimit-* correlation telemetry</div>
               </div>
             </div>
-            <button type="button" class="btn btn-sm" id="refreshOutboxBtn">Reload Feed</button>
+            <div class="btn-row">
+              <button type="button" class="btn btn-sm btn-primary" id="runMaintenanceBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M23 4v6h-6"></path>
+                  <path d="M1 20v-6h6"></path>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+                Run Hold-Expiry &amp; Outbox Worker
+              </button>
+              <button type="button" class="btn btn-sm" id="refreshOutboxBtn">Reload Feed</button>
+            </div>
           </div>
+
+          <div class="telemetry-bar" id="maintenanceTelemetryBar" style="display:none;"></div>
 
           <div class="telemetry-bar">
             <span><strong>Last X-Request-Id:</strong> <span class="mono" id="lastRequestId">-</span></span>
@@ -1307,10 +1319,14 @@
             } else if (slot.status === "HOLD") {
               actionsHtml = `
                 <button type="button" class="btn btn-sky btn-sm" data-action="inspect-webhook" data-booking-id="${slot.booking_id}">Webhook Lab</button>
+                <button type="button" class="btn btn-amber btn-sm" data-action="reschedule" data-booking-id="${slot.booking_id}" data-idx="${idx}">Reschedule (+1h)</button>
+                <button type="button" class="btn btn-sm" data-action="download-ics" data-booking-id="${slot.booking_id}">Download .ics</button>
                 <button type="button" class="btn btn-rose btn-sm" data-action="cancel" data-booking-id="${slot.booking_id}">Cancel</button>
               `;
             } else if (slot.status === "CONFIRMED") {
               actionsHtml = `
+                <button type="button" class="btn btn-amber btn-sm" data-action="reschedule" data-booking-id="${slot.booking_id}" data-idx="${idx}">Reschedule (+1h)</button>
+                <button type="button" class="btn btn-sm" data-action="download-ics" data-booking-id="${slot.booking_id}">Download .ics</button>
                 <button type="button" class="btn btn-rose btn-sm" data-action="cancel" data-booking-id="${slot.booking_id}">Cancel</button>
               `;
             } else {
@@ -1483,6 +1499,88 @@
           );
         }
         await refreshTimelineAndBookings();
+      }
+
+      async function rescheduleBookingById(bookingId, slot) {
+        const authed = await ensureAuthenticatedMember();
+        if (!authed) return;
+        const oldStart = new Date(slot.start_time);
+        const oldEnd = new Date(slot.end_time);
+        const durationMs = oldEnd.getTime() - oldStart.getTime();
+        const newStart = new Date(oldStart.getTime() + 60 * 60 * 1000);
+        const newEnd = new Date(newStart.getTime() + durationMs);
+
+        const res = await apiFetch(`/api/v1/bookings/${bookingId}/reschedule`, {
+          method: "POST",
+          body: JSON.stringify({
+            start_time: newStart.toISOString(),
+            end_time: newEnd.toISOString(),
+          }),
+        });
+        if (res.ok) {
+          showBanner(
+            `Rescheduled booking #${bookingId} to ${formatUtcClock(newStart.toISOString())}–${formatUtcClock(newEnd.toISOString())} UTC.`,
+            "ok"
+          );
+        } else {
+          showBanner(
+            `Reschedule rejected (HTTP ${res.status}): ${res.data?.detail || "Conflict"} [request_id=${res.data?.request_id || "-"}]`,
+            "error"
+          );
+        }
+        await refreshTimelineAndBookings();
+      }
+
+      async function downloadBookingIcs(bookingId) {
+        const authed = await ensureAuthenticatedMember();
+        if (!authed) return;
+        try {
+          const headers = {};
+          if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
+          const res = await fetch(`/api/v1/bookings/${bookingId}/ics`, { headers });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            showBanner(`Calendar export failed (HTTP ${res.status}): ${err.detail || res.statusText}`, "error");
+            return;
+          }
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `slotguard-booking-${bookingId}.ics`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+          showBanner(`Downloaded calendar file slotguard-booking-${bookingId}.ics`, "ok");
+        } catch (err) {
+          showBanner(`Calendar download error: ${err.message}`, "error");
+        }
+      }
+
+      async function triggerMaintenanceSweep() {
+        const btn = el("runMaintenanceBtn");
+        btn.disabled = true;
+        try {
+          const res = await apiFetch("/api/v1/ops/run-maintenance", { method: "POST" });
+          if (res.ok) {
+            const d = res.data;
+            const msg = `Sweep completed: ${d.expired_holds} hold(s) expired · ${d.outbox_sent} outbox notification(s) sent · ${d.outbox_failed} failed`;
+            showBanner(msg, "ok");
+            const bar = el("maintenanceTelemetryBar");
+            if (bar) {
+              bar.style.display = "flex";
+              bar.innerHTML = `<span><strong>Last Worker Sweep:</strong> <span class="mono">${escapeHtml(msg)}</span></span>`;
+            }
+          } else {
+            showBanner(`Maintenance failed (HTTP ${res.status}): ${res.data?.detail || res.statusText}`, "error");
+          }
+        } catch (err) {
+          showBanner(`Maintenance error: ${err.message}`, "error");
+        } finally {
+          btn.disabled = false;
+          await Promise.all([refreshTimelineAndBookings(), loadMetrics(), loadOutbox()]);
+        }
       }
 
       async function runRaceBurst25() {
@@ -1744,6 +1842,7 @@
         await refreshTimelineAndBookings();
       });
       el("refreshOutboxBtn").addEventListener("click", () => Promise.all([loadOutbox(), loadMetrics()]));
+      el("runMaintenanceBtn").addEventListener("click", triggerMaintenanceSweep);
 
       el("slotsGrid").addEventListener("click", (e) => {
         const btn = e.target.closest("button[data-action]");
@@ -1767,6 +1866,13 @@
             state.signedEnvelope = null;
             signDemoWebhook();
           }
+        } else if (action === "reschedule") {
+          const bookingId = Number(btn.dataset.bookingId);
+          const slot = state.slots[Number(btn.dataset.idx)];
+          if (bookingId && slot) rescheduleBookingById(bookingId, slot);
+        } else if (action === "download-ics") {
+          const bookingId = Number(btn.dataset.bookingId);
+          if (bookingId) downloadBookingIcs(bookingId);
         } else if (action === "cancel") {
           const bookingId = Number(btn.dataset.bookingId);
           if (bookingId) cancelBookingById(bookingId);

@@ -43,9 +43,8 @@ class MaintenanceWorker:
                 lock_manager=self._lock_manager,
                 metrics=self._metrics,
             )
-            expired = await service.expire_stale_holds()
-            sent = await service.process_pending_outbox()
-            return expired, sent
+            result = await service.run_cycle()
+            return result["expired_holds"], result["outbox_sent"]
 
     async def _loop(self) -> None:
         while not self._stop_event.is_set():

@@ -7,9 +7,17 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from slotguard import __version__
-from slotguard.api.deps import get_app_settings, get_metrics
+from slotguard.api.deps import (
+    get_app_clock,
+    get_app_settings,
+    get_metrics,
+    get_resource_locks,
+)
+from slotguard.core.clock import Clock
 from slotguard.core.config import Settings
 from slotguard.core.database import get_db_session
+from slotguard.core.exceptions import ForbiddenError
+from slotguard.core.locks import ResourceLockManager
 from slotguard.core.metrics import SlotGuardMetrics
 from slotguard.core.problem_details import ProblemDetail
 from slotguard.models.booking import BookingStatus
@@ -21,12 +29,14 @@ from slotguard.schemas.ops import (
     DatabaseTotalsSummary,
     LatencyMetricsSummary,
     MaintenanceMetricsSummary,
+    MaintenanceRunResponse,
     MetricsSummaryResponse,
     OutboxRecentItem,
     OutboxRecentResponse,
     RequestMetricsSummary,
     WebhookMetricsSummary,
 )
+from slotguard.services.maintenance_service import MaintenanceService
 
 router = APIRouter(tags=["Observability"])
 
@@ -154,3 +164,32 @@ async def get_recent_outbox(
         ],
         total=total,
     )
+
+
+@router.post(
+    "/ops/run-maintenance",
+    response_model=MaintenanceRunResponse,
+    summary="Trigger an on-demand hold expiry and outbox delivery sweep (non-production only)",
+    responses={
+        200: {"description": "Maintenance sweep completed successfully"},
+        403: {"model": ProblemDetail, "description": "Disabled in production environment"},
+    },
+)
+async def run_maintenance(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    clock: Annotated[Clock, Depends(get_app_clock)],
+    lock_manager: Annotated[ResourceLockManager, Depends(get_resource_locks)],
+    metrics: Annotated[SlotGuardMetrics, Depends(get_metrics)],
+) -> MaintenanceRunResponse:
+    """Run one maintenance cycle outside production environments."""
+    if settings.environment.strip().lower() == "production":
+        raise ForbiddenError("Maintenance sweep endpoint is disabled in production environments.")
+    service = MaintenanceService(
+        session=session,
+        clock=clock,
+        lock_manager=lock_manager,
+        metrics=metrics,
+    )
+    result = await service.run_cycle()
+    return MaintenanceRunResponse(**result)

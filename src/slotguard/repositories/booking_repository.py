@@ -61,18 +61,18 @@ class BookingRepository:
         resource_id: int,
         start_time: datetime,
         end_time: datetime,
+        exclude_booking_id: int | None = None,
     ) -> bool:
         """Check whether any HOLD/CONFIRMED booking overlaps half-open [start_time, end_time)."""
-        stmt = (
-            select(Booking.id)
-            .where(
-                Booking.resource_id == resource_id,
-                Booking.status.in_(ACTIVE_BOOKING_STATUSES),
-                Booking.start_time < end_time,
-                Booking.end_time > start_time,
-            )
-            .limit(1)
+        stmt = select(Booking.id).where(
+            Booking.resource_id == resource_id,
+            Booking.status.in_(ACTIVE_BOOKING_STATUSES),
+            Booking.start_time < end_time,
+            Booking.end_time > start_time,
         )
+        if exclude_booking_id is not None:
+            stmt = stmt.where(Booking.id != exclude_booking_id)
+        stmt = stmt.limit(1)
         return (await self._session.execute(stmt)).scalar_one_or_none() is not None
 
     async def list_paginated(

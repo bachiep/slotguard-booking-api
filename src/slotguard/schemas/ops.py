@@ -97,3 +97,11 @@ class OutboxRecentResponse(BaseModel):
 
     items: list[OutboxRecentItem]
     total: int
+
+
+class MaintenanceRunResponse(BaseModel):
+    """Result of an on-demand maintenance worker sweep."""
+
+    expired_holds: int
+    outbox_sent: int
+    outbox_failed: int

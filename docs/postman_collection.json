@@ -222,6 +222,38 @@
         "method": "GET",
         "url": "{{baseUrl}}/api/v1/outbox/recent?limit=15"
       }
+    },
+    {
+      "name": "13. Reschedule Active Booking (v2.1)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{memberToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start_time\": \"2026-12-10T16:00:00Z\",\n  \"end_time\": \"2026-12-10T17:00:00Z\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/bookings/{{bookingId}}/reschedule"
+      }
+    },
+    {
+      "name": "14. Export RFC-5545 iCalendar (.ics) File (v2.1)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{memberToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/bookings/{{bookingId}}/ics"
+      }
+    },
+    {
+      "name": "15. Trigger On-Demand Maintenance Sweep (v2.1 Non-Prod)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/ops/run-maintenance"
+      }
     }
   ]
 }
