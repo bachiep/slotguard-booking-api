@@ -85,3 +85,32 @@ Content-Type: application/json
 ### 9. Cancel Active HOLD Booking
 POST {{baseUrl}}/api/v1/bookings/{{bookingId}}/cancel
 Authorization: Bearer {{memberToken}}
+
+### 10. Non-Prod HMAC Webhook Demo Signer (returns timestamp, signature, raw_body)
+# @name demoSignWebhook
+POST {{baseUrl}}/api/v1/webhooks/demo-sign
+Content-Type: application/json
+
+{
+  "booking_id": {{bookingId}},
+  "provider": "payos"
+}
+
+###
+@webhookTs = {{demoSignWebhook.response.body.$.timestamp}}
+@webhookSig = {{demoSignWebhook.response.body.$.signature}}
+@webhookBody = {{demoSignWebhook.response.body.$.raw_body}}
+
+### 11. Dispatch Signed Payment Webhook
+POST {{baseUrl}}/api/v1/webhooks/payment
+Content-Type: application/json
+X-Webhook-Timestamp: {{webhookTs}}
+X-Webhook-Signature: {{webhookSig}}
+
+{{webhookBody}}
+
+### 12. Runtime Metrics & Latency Telemetry Summary
+GET {{baseUrl}}/api/v1/metrics/summary
+
+### 13. Inspect Recent Transactional Outbox Rows
+GET {{baseUrl}}/api/v1/outbox/recent?limit=10

@@ -1,6 +1,6 @@
 """Async repository for transactional outbox notifications."""
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from slotguard.models.webhook import OutboxNotification, OutboxNotificationStatus
@@ -25,3 +25,24 @@ class OutboxRepository:
             .limit(limit)
         )
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def list_recent(self, *, limit: int = 20) -> tuple[list[OutboxNotification], int]:
+        """Return newest outbox notification rows alongside total count."""
+        total = int(
+            (await self._session.execute(select(func.count(OutboxNotification.id)))).scalar_one()
+        )
+        stmt = (
+            select(OutboxNotification)
+            .order_by(OutboxNotification.created_at.desc(), OutboxNotification.id.desc())
+            .limit(limit)
+        )
+        items = list((await self._session.execute(stmt)).scalars().all())
+        return items, total
+
+    async def count_by_status(self) -> dict[str, int]:
+        """Return outbox notification counts grouped by status."""
+        stmt = select(OutboxNotification.status, func.count(OutboxNotification.id)).group_by(
+            OutboxNotification.status
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {str(status_value): int(count) for status_value, count in rows}

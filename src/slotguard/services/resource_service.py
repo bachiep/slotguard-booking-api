@@ -162,16 +162,31 @@ class ResourceService:
         cursor = day_start
         while cursor + step <= day_end:
             slot_end = cursor + step
-            overlaps = any(
-                booking.start_time < slot_end and booking.end_time > cursor
+            overlapping = [
+                booking
                 for booking in active_bookings
-            )
-            is_available = (not overlaps) and (cursor >= now)
+                if booking.start_time < slot_end and booking.end_time > cursor
+            ]
+            if overlapping:
+                matched = overlapping[0]
+                slot_status = matched.status
+                matched_booking_id: int | None = matched.id
+                is_available = False
+            elif cursor < now:
+                slot_status = "PAST"
+                matched_booking_id = None
+                is_available = False
+            else:
+                slot_status = "FREE"
+                matched_booking_id = None
+                is_available = True
             slots.append(
                 AvailabilitySlotResponse(
                     start_time=cursor,
                     end_time=slot_end,
                     available=is_available,
+                    status=slot_status,
+                    booking_id=matched_booking_id,
                 )
             )
             cursor = slot_end

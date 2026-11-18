@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     worker_enabled: bool = True
     worker_poll_interval_seconds: int = 30
 
+    @property
+    def environment(self) -> str:
+        """Expose normalized environment alias for runtime guards."""
+        return self.app_env
+
 
 @lru_cache
 def get_settings() -> Settings:

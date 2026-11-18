@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from slotguard.core.clock import Clock
 from slotguard.core.exceptions import AppError
+from slotguard.core.middleware import get_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class ProblemDetail(BaseModel):
     detail: str
     instance: str
     timestamp: str
+    request_id: str | None = None
     errors: list[dict[str, Any]] | None = None
 
 
@@ -39,6 +41,7 @@ def _build_problem_response(
     headers: dict[str, str] | None = None,
     errors: list[dict[str, Any]] | None = None,
 ) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None) or get_request_id()
     payload = ProblemDetail(
         type=error_type,
         title=title,
@@ -46,6 +49,7 @@ def _build_problem_response(
         detail=detail,
         instance=request.url.path,
         timestamp=clock.now().isoformat(),
+        request_id=request_id,
         errors=errors,
     )
     return JSONResponse(

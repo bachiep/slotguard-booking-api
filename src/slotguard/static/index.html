@@ -1,0 +1,1813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SlotGuard v2.0.0 — Timeline &amp; Concurrency Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-canvas: #0F172A;
+      --bg-card: #1E293B;
+      --bg-well: #0B1220;
+      --bg-hover: #273449;
+      --border: #334155;
+      --border-strong: #475569;
+      --text-primary: #F8FAFC;
+      --text-secondary: #CBD5E1;
+      --text-muted: #94A3B8;
+      --emerald: #22C55E;
+      --emerald-soft: rgba(34, 197, 94, 0.14);
+      --emerald-text: #86EFAC;
+      --amber: #F59E0B;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --amber-text: #FDE68A;
+      --sky: #38BDF8;
+      --sky-soft: rgba(56, 189, 248, 0.14);
+      --sky-text: #BAE6FD;
+      --rose: #EF4444;
+      --rose-soft: rgba(239, 68, 68, 0.14);
+      --rose-text: #FCA5A5;
+      --slate-soft: rgba(148, 163, 184, 0.12);
+      --font-sans: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --radius: 8px;
+      --radius-sm: 6px;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    .tabular {
+      font-variant-numeric: tabular-nums;
+      font-family: var(--font-mono);
+    }
+
+    .mono {
+      font-family: var(--font-mono);
+    }
+
+    button, input, select {
+      font: inherit;
+      color: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible {
+      outline: 2px solid var(--sky);
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition: none !important;
+        animation: none !important;
+      }
+    }
+
+    .app-shell {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Header Bar */
+    .header-bar {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .header-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius-sm);
+      background: var(--emerald-soft);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      color: var(--emerald);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .brand-title {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text-primary);
+    }
+
+    .brand-sub {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .metrics-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+
+    .metric-pill {
+      background: var(--bg-well);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .metric-pill .label {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .metric-pill .val {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .metric-pill.emerald .val { color: var(--emerald-text); }
+    .metric-pill.amber .val { color: var(--amber-text); }
+    .metric-pill.sky .val { color: var(--sky-text); }
+    .metric-pill.rose .val { color: var(--rose-text); }
+
+    /* Buttons & Inputs */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 36px;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background: var(--bg-well);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+      white-space: normal;
+      text-align: center;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: var(--bg-hover);
+      border-color: #64748B;
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--emerald);
+      border-color: var(--emerald);
+      color: #052E16;
+      font-weight: 600;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #4ADE80;
+      border-color: #4ADE80;
+    }
+
+    .btn-sky {
+      background: var(--sky);
+      border-color: var(--sky);
+      color: #082F49;
+      font-weight: 600;
+    }
+
+    .btn-sky:hover:not(:disabled) {
+      background: #7DD3FC;
+      border-color: #7DD3FC;
+    }
+
+    .btn-amber {
+      background: var(--amber-soft);
+      border-color: rgba(245, 158, 11, 0.5);
+      color: var(--amber-text);
+    }
+
+    .btn-amber:hover:not(:disabled) {
+      background: rgba(245, 158, 11, 0.24);
+    }
+
+    .btn-rose {
+      background: var(--rose-soft);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: var(--rose-text);
+    }
+
+    .btn-rose:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.24);
+    }
+
+    .btn-sm {
+      min-height: 30px;
+      padding: 4px 9px;
+      font-size: 12px;
+    }
+
+    .control-input, .control-select {
+      min-height: 36px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background: var(--bg-well);
+      color: var(--text-primary);
+      font-size: 13px;
+      max-width: 100%;
+    }
+
+    /* Toolbar */
+    .toolbar-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .toolbar-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .field label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+
+    .auth-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 36px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-well);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .dot.active {
+      background: var(--emerald);
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.65);
+    }
+
+    /* Main Workspace Grid */
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    @media (max-width: 1080px) {
+      .workspace-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .card-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .card-title-row svg {
+      color: var(--sky);
+      flex-shrink: 0;
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      letter-spacing: 0.02em;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .badge-free, .badge-sent, .badge-ok {
+      background: var(--emerald-soft);
+      color: var(--emerald-text);
+      border-color: rgba(34, 197, 94, 0.35);
+    }
+
+    .badge-hold, .badge-pending, .badge-conflict {
+      background: var(--amber-soft);
+      color: var(--amber-text);
+      border-color: rgba(245, 158, 11, 0.35);
+    }
+
+    .badge-confirmed, .badge-info {
+      background: var(--sky-soft);
+      color: var(--sky-text);
+      border-color: rgba(56, 189, 248, 0.35);
+    }
+
+    .badge-past, .badge-muted {
+      background: var(--slate-soft);
+      color: var(--text-muted);
+      border-color: rgba(148, 163, 184, 0.25);
+    }
+
+    .badge-error, .badge-failed {
+      background: var(--rose-soft);
+      color: var(--rose-text);
+      border-color: rgba(239, 68, 68, 0.35);
+    }
+
+    /* Timeline Slots */
+    .resource-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      background: var(--bg-well);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .slots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 10px;
+    }
+
+    .slot-card {
+      background: var(--bg-well);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 11px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: border-color 150ms ease, background-color 150ms ease;
+    }
+
+    .slot-card.status-FREE {
+      border-left: 3px solid var(--emerald);
+    }
+
+    .slot-card.status-HOLD {
+      border-left: 3px solid var(--amber);
+    }
+
+    .slot-card.status-CONFIRMED {
+      border-left: 3px solid var(--sky);
+    }
+
+    .slot-card.status-PAST {
+      border-left: 3px solid #64748B;
+      opacity: 0.72;
+    }
+
+    .slot-card.selected-race {
+      border-color: var(--sky);
+      box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.35);
+    }
+
+    .slot-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .slot-time {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .slot-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .slot-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    /* Scorecard & Tables */
+    .scorecard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+    }
+
+    .score-box {
+      background: var(--bg-well);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .score-box .k {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .score-box .v {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .score-box.emerald .v { color: var(--emerald-text); }
+    .score-box.amber .v { color: var(--amber-text); }
+    .score-box.rose .v { color: var(--rose-text); }
+    .score-box.sky .v { color: var(--sky-text); }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-well);
+      max-height: 290px;
+      overflow-y: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      text-align: left;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #131C2E;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 7px 10px;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.55);
+      color: var(--text-secondary);
+      vertical-align: top;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .code-box {
+      background: var(--bg-well);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+    }
+
+    .telemetry-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-well);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .status-banner {
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-well);
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .status-banner.ok {
+      border-color: rgba(34, 197, 94, 0.45);
+      background: rgba(34, 197, 94, 0.08);
+      color: var(--emerald-text);
+    }
+
+    .status-banner.error {
+      border-color: rgba(239, 68, 68, 0.5);
+      background: rgba(239, 68, 68, 0.08);
+      color: var(--rose-text);
+    }
+
+    .status-banner.info {
+      border-color: rgba(56, 189, 248, 0.45);
+      background: rgba(56, 189, 248, 0.08);
+      color: var(--sky-text);
+    }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .empty-state {
+      padding: 18px 12px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      background: var(--bg-well);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    @media (max-width: 640px) {
+      .app-shell {
+        padding: 10px;
+        gap: 12px;
+      }
+      .header-bar, .toolbar-card, .card {
+        padding: 12px;
+      }
+      .slots-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Header Bar -->
+    <header class="header-bar">
+      <div class="header-top">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              <path d="M9 12l2 2 4-4"></path>
+            </svg>
+          </div>
+          <div>
+            <h1 class="brand-title">SlotGuard v2.0.0 — Timeline &amp; Concurrency Lab</h1>
+            <p class="brand-sub" id="healthSummaryText">Connecting to API telemetry...</p>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button type="button" class="btn btn-sm" id="togglePollingBtn" aria-pressed="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span id="pollingLabel">Live Poll: ON</span>
+          </button>
+          <a class="btn btn-sm" href="/api/v1/metrics/summary" target="_blank" rel="noopener">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            Metrics JSON
+          </a>
+          <a class="btn btn-sky btn-sm" href="/docs" target="_blank" rel="noopener">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            OpenAPI /docs
+          </a>
+        </div>
+      </div>
+
+      <div class="metrics-strip" aria-label="Live runtime metrics">
+        <div class="metric-pill">
+          <span class="label">Requests</span>
+          <span class="val" id="mRequests">0</span>
+        </div>
+        <div class="metric-pill emerald">
+          <span class="label">201 Holds</span>
+          <span class="val" id="mHolds">0</span>
+        </div>
+        <div class="metric-pill amber">
+          <span class="label">409 Blocked</span>
+          <span class="val" id="mConflicts">0</span>
+        </div>
+        <div class="metric-pill sky">
+          <span class="label">Webhooks Verified</span>
+          <span class="val" id="mWebhooksVerified">0</span>
+        </div>
+        <div class="metric-pill rose">
+          <span class="label">Rate Limits</span>
+          <span class="val" id="mRateLimits">0</span>
+        </div>
+        <div class="metric-pill">
+          <span class="label">Latency p50 / p95</span>
+          <span class="val" id="mLatency">0.00 / 0.00 ms</span>
+        </div>
+        <div class="metric-pill">
+          <span class="label">Outbox Sent</span>
+          <span class="val" id="mOutbox">0</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 1-Click Demo Auth & Resource/Date Toolbar -->
+    <section class="toolbar-card" aria-label="Demo authentication and resource filter">
+      <div class="toolbar-group">
+        <div class="field">
+          <label>1-Click Demo Auth</label>
+          <div class="btn-row">
+            <button type="button" class="btn btn-primary" id="loginMemberBtn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              Sign in MEMBER
+            </button>
+            <button type="button" class="btn" id="loginOwnerBtn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              Sign in OWNER
+            </button>
+            <button type="button" class="btn" id="logoutBtn" style="display:none;">Sign Out</button>
+          </div>
+        </div>
+        <div class="auth-pill" id="authStatusPill">
+          <span class="dot" id="authDot"></span>
+          <span id="authStatusText">Guest session (click a role to sign in)</span>
+        </div>
+      </div>
+
+      <div class="toolbar-group">
+        <div class="field">
+          <label for="resourceSelect">Resource</label>
+          <select id="resourceSelect" class="control-select"></select>
+        </div>
+        <div class="field">
+          <label for="dateInput">UTC Date</label>
+          <input id="dateInput" type="date" class="control-input tabular" />
+        </div>
+        <button type="button" class="btn" id="refreshAllBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+          Refresh
+        </button>
+      </div>
+    </section>
+
+    <div id="globalBanner" class="status-banner info" style="display:none;" role="status" aria-live="polite">
+      <span id="globalBannerText"></span>
+      <button type="button" class="btn btn-sm" id="dismissBannerBtn">Dismiss</button>
+    </div>
+
+    <!-- Main 2-Column Workspace -->
+    <main class="workspace-grid">
+      <!-- Left Column: Timeline + Concurrency Race Lab -->
+      <div class="stack">
+        <!-- Hourly Timeline -->
+        <section class="card" aria-label="Hourly slot availability timeline">
+          <div class="card-header">
+            <div class="card-title-row">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+              <div>
+                <h2 class="card-title">Hourly Availability Timeline (UTC)</h2>
+                <div class="card-subtitle">Half-open [start, end) inventory backed by composite SQL index</div>
+              </div>
+            </div>
+            <div class="btn-row">
+              <span class="badge badge-free">FREE</span>
+              <span class="badge badge-hold">HOLD (15m TTL)</span>
+              <span class="badge badge-confirmed">CONFIRMED</span>
+            </div>
+          </div>
+
+          <div class="resource-meta" id="resourceMetaBar">
+            <span>Loading resources...</span>
+          </div>
+
+          <div class="slots-grid" id="slotsGrid">
+            <div class="empty-state">Loading slot availability...</div>
+          </div>
+        </section>
+
+        <!-- Concurrency Race Lab -->
+        <section class="card" aria-label="Concurrency race lab">
+          <div class="card-header">
+            <div class="card-title-row">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              <div>
+                <h2 class="card-title">Concurrency Race Lab (25-Request Burst)</h2>
+                <div class="card-subtitle">Fires 25 simultaneous POST /api/v1/bookings via Promise.all on one slot</div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-primary" id="runRaceBtn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              Run 25-Request Race Burst
+            </button>
+          </div>
+
+          <div class="telemetry-bar">
+            <span><strong>Target Slot:</strong> <span class="mono" id="raceTargetLabel">Select any FREE slot above</span></span>
+            <span><strong>Lock Strategy:</strong> <span class="mono">asyncio.Lock(resource_id) + FOR UPDATE</span></span>
+          </div>
+
+          <div class="scorecard">
+            <div class="score-box emerald">
+              <span class="k">201 HOLD Created</span>
+              <span class="v" id="race201">0</span>
+            </div>
+            <div class="score-box amber">
+              <span class="k">409 Conflict Blocked</span>
+              <span class="v" id="race409">0</span>
+            </div>
+            <div class="score-box rose">
+              <span class="k">429 / Other</span>
+              <span class="v" id="raceOther">0</span>
+            </div>
+            <div class="score-box sky">
+              <span class="k">Double-Bookings</span>
+              <span class="v" id="raceDouble">0</span>
+            </div>
+            <div class="score-box">
+              <span class="k">Burst Elapsed</span>
+              <span class="v" id="raceElapsed">0.0 ms</span>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Status</th>
+                  <th>Outcome</th>
+                  <th>X-Request-Id</th>
+                  <th>Time (ms)</th>
+                  <th>RL Rem</th>
+                </tr>
+              </thead>
+              <tbody id="raceTableBody">
+                <tr>
+                  <td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">
+                    Click "Run 25-Request Race Burst" to observe serialized lock contention.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- Right Column: Webhook Simulator + Outbox Feed + Telemetry -->
+      <div class="stack">
+        <!-- HMAC Webhook Simulator -->
+        <section class="card" aria-label="HMAC-SHA256 webhook simulator">
+          <div class="card-header">
+            <div class="card-title-row">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <div>
+                <h2 class="card-title">HMAC-SHA256 Webhook Simulator</h2>
+                <div class="card-subtitle">Server-side non-prod signing (/demo-sign) — zero secrets in browser JS</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="webhookHoldSelect">Active HOLD Booking</label>
+              <select id="webhookHoldSelect" class="control-select"></select>
+            </div>
+            <div class="field">
+              <label for="webhookBookingIdInput">Booking ID</label>
+              <input id="webhookBookingIdInput" type="number" min="1" class="control-input tabular" placeholder="e.g. 2" />
+            </div>
+            <div class="field">
+              <label for="webhookProviderSelect">Provider</label>
+              <select id="webhookProviderSelect" class="control-select">
+                <option value="payos">payos</option>
+                <option value="vnpay">vnpay</option>
+                <option value="stripe">stripe</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="webhookEventIdInput">Event ID (optional)</label>
+              <input id="webhookEventIdInput" type="text" class="control-input mono" placeholder="Auto-generated on sign" />
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button type="button" class="btn btn-sky" id="signWebhookBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+              </svg>
+              Sign Payload
+            </button>
+            <button type="button" class="btn btn-primary" id="sendValidWebhookBtn">Send Valid Webhook</button>
+            <button type="button" class="btn btn-amber" id="replayWebhook3xBtn">Replay Same Event 3x</button>
+            <button type="button" class="btn btn-rose" id="sendTamperedWebhookBtn">Send Tampered Signature</button>
+          </div>
+
+          <div class="field">
+            <label>Signed Request Preview (X-Webhook-Timestamp / X-Webhook-Signature / Raw Body)</label>
+            <pre class="code-box" id="signedPreviewBox">Select a HOLD booking and click "Sign Payload" to generate an HMAC-SHA256 signature.</pre>
+          </div>
+
+          <div class="field">
+            <label>Webhook Delivery &amp; RFC 7807 Response Inspector</label>
+            <pre class="code-box" id="webhookResultBox">No webhook dispatched yet.</pre>
+          </div>
+        </section>
+
+        <!-- Last HTTP / Rate-Limit Telemetry + Outbox Inspector -->
+        <section class="card" aria-label="Outbox inspector and rate limit telemetry">
+          <div class="card-header">
+            <div class="card-title-row">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
+                <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+              </svg>
+              <div>
+                <h2 class="card-title">Transactional Outbox &amp; Rate-Limit Feed</h2>
+                <div class="card-subtitle">Live GET /api/v1/outbox/recent + X-RateLimit-* correlation telemetry</div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm" id="refreshOutboxBtn">Reload Feed</button>
+          </div>
+
+          <div class="telemetry-bar">
+            <span><strong>Last X-Request-Id:</strong> <span class="mono" id="lastRequestId">-</span></span>
+            <span><strong>Latency:</strong> <span class="tabular" id="lastResponseTime">-</span></span>
+            <span><strong>X-RateLimit-Limit:</strong> <span class="tabular" id="lastRlLimit">-</span></span>
+            <span><strong>X-RateLimit-Remaining:</strong> <span class="tabular" id="lastRlRemaining">-</span></span>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Booking</th>
+                  <th>Event Type</th>
+                  <th>Status</th>
+                  <th>Attempts</th>
+                  <th>Summary</th>
+                </tr>
+              </thead>
+              <tbody id="outboxTableBody">
+                <tr>
+                  <td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">
+                    Loading outbox feed...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      const DEMO_ACCOUNTS = {
+        MEMBER: { email: "member@slotguard.dev", password: "Member@1234" },
+        OWNER: { email: "owner@slotguard.dev", password: "Owner@1234" },
+      };
+
+      const state = {
+        token: null,
+        user: null,
+        resources: [],
+        selectedResourceId: null,
+        selectedDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+        slots: [],
+        selectedRaceSlot: null,
+        holdBookings: [],
+        signedEnvelope: null,
+        pollingEnabled: true,
+        pollTimer: null,
+      };
+
+      const el = (id) => document.getElementById(id);
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function showBanner(text, kind = "info") {
+        const banner = el("globalBanner");
+        banner.className = `status-banner ${kind}`;
+        el("globalBannerText").textContent = text;
+        banner.style.display = "flex";
+      }
+
+      function hideBanner() {
+        el("globalBanner").style.display = "none";
+      }
+
+      function updateTelemetryBar(headers) {
+        if (!headers) return;
+        const reqId = headers.get("x-request-id");
+        const rtMs = headers.get("x-response-time-ms");
+        const rlLimit = headers.get("x-ratelimit-limit");
+        const rlRemaining = headers.get("x-ratelimit-remaining");
+        if (reqId) el("lastRequestId").textContent = reqId;
+        if (rtMs) el("lastResponseTime").textContent = `${rtMs} ms`;
+        if (rlLimit !== null) el("lastRlLimit").textContent = rlLimit;
+        if (rlRemaining !== null) el("lastRlRemaining").textContent = rlRemaining;
+      }
+
+      async function apiFetch(path, options = {}) {
+        const headers = new Headers(options.headers || {});
+        if (state.token && !headers.has("Authorization")) {
+          headers.set("Authorization", `Bearer ${state.token}`);
+        }
+        const response = await fetch(path, { ...options, headers });
+        updateTelemetryBar(response.headers);
+        let data = null;
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("json")) {
+          data = await response.json();
+        } else {
+          const txt = await response.text();
+          data = txt ? { raw: txt } : null;
+        }
+        return {
+          ok: response.ok,
+          status: response.status,
+          headers: response.headers,
+          data,
+        };
+      }
+
+      function formatCents(cents) {
+        return `$${(Number(cents || 0) / 100).toFixed(2)}`;
+      }
+
+      function formatUtcClock(isoString) {
+        if (!isoString) return "";
+        const d = new Date(isoString);
+        return d.toISOString().slice(11, 16);
+      }
+
+      function updateAuthUI() {
+        const dot = el("authDot");
+        const text = el("authStatusText");
+        const logoutBtn = el("logoutBtn");
+        if (state.user && state.token) {
+          dot.classList.add("active");
+          text.textContent = `${state.user.full_name} (${state.user.role}) · ${state.user.email}`;
+          logoutBtn.style.display = "inline-flex";
+        } else {
+          dot.classList.remove("active");
+          text.textContent = "Guest session (click a role to sign in)";
+          logoutBtn.style.display = "none";
+        }
+      }
+
+      async function signInAs(role, { quiet = false } = {}) {
+        const creds = DEMO_ACCOUNTS[role];
+        const res = await apiFetch("/api/v1/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(creds),
+        });
+        if (!res.ok) {
+          showBanner(
+            `Sign-in failed (${res.status}): ${res.data?.detail || "Check that seed_demo has been run."}`,
+            "error"
+          );
+          return false;
+        }
+        state.token = res.data.access_token;
+        state.user = res.data.user;
+        updateAuthUI();
+        if (!quiet) {
+          showBanner(
+            `Authenticated as ${state.user.full_name} (${state.user.role}). Request ID: ${res.headers.get("x-request-id") || "-"}`,
+            "ok"
+          );
+        }
+        await refreshTimelineAndBookings();
+        return true;
+      }
+
+      async function ensureAuthenticatedMember() {
+        if (state.token && state.user) return true;
+        return await signInAs("MEMBER", { quiet: false });
+      }
+
+      async function loadHealth() {
+        const res = await apiFetch("/api/v1/health");
+        if (res.ok && res.data) {
+          el("healthSummaryText").textContent =
+            `env=${res.data.environment} · db=${res.data.database_dialect} · rate-limit=${res.data.rate_limit_backend}`;
+        }
+      }
+
+      async function loadMetrics() {
+        const res = await apiFetch("/api/v1/metrics/summary");
+        if (!res.ok || !res.data) return;
+        const d = res.data;
+        el("mRequests").textContent = String(d.requests.total);
+        el("mHolds").textContent = String(d.bookings.holds_created);
+        el("mConflicts").textContent = String(d.bookings.conflicts_blocked_409);
+        el("mWebhooksVerified").textContent = String(d.webhooks.verified);
+        el("mRateLimits").textContent = String(d.requests.rate_limit_hits_429);
+        el("mLatency").textContent = `${d.latency_ms.p50.toFixed(2)} / ${d.latency_ms.p95.toFixed(2)} ms`;
+        el("mOutbox").textContent = String(d.database_totals.outbox_sent);
+      }
+
+      async function loadResources() {
+        const res = await apiFetch("/api/v1/resources?limit=100&active_only=true");
+        if (!res.ok || !res.data) return;
+        state.resources = res.data.items || [];
+        const select = el("resourceSelect");
+        if (!state.resources.length) {
+          select.innerHTML = `<option value="">No active resources</option>`;
+          el("resourceMetaBar").textContent = "No resources found. Run python -m scripts.seed_demo to populate demo data.";
+          return;
+        }
+        if (!state.selectedResourceId || !state.resources.some((r) => r.id === state.selectedResourceId)) {
+          state.selectedResourceId = state.resources[0].id;
+        }
+        select.innerHTML = state.resources
+          .map(
+            (r) =>
+              `<option value="${r.id}">${escapeHtml(r.name)} (${escapeHtml(r.resource_type)} · ${formatCents(r.hourly_rate_cents)}/hr)</option>`
+          )
+          .join("");
+        select.value = String(state.selectedResourceId);
+      }
+
+      function renderResourceMeta(resource) {
+        if (!resource) return;
+        el("resourceMetaBar").innerHTML = `
+          <span><strong>${escapeHtml(resource.name)}</strong></span>
+          <span>Type: <span class="mono">${escapeHtml(resource.resource_type)}</span></span>
+          <span>Capacity: <span class="tabular">${resource.capacity}</span></span>
+          <span>Rate: <span class="tabular">${formatCents(resource.hourly_rate_cents)}/hr</span></span>
+          <span>Window: <span class="tabular">${escapeHtml(resource.open_time.slice(0, 5))}–${escapeHtml(resource.close_time.slice(0, 5))} UTC (${resource.slot_duration_minutes}m)</span></span>
+        `;
+      }
+
+      function updateRaceTargetDisplay() {
+        if (!state.selectedRaceSlot) {
+          el("raceTargetLabel").textContent = "No FREE slot available on selected date";
+          el("runRaceBtn").disabled = true;
+          return;
+        }
+        const s = state.selectedRaceSlot;
+        el("raceTargetLabel").textContent =
+          `Resource #${state.selectedResourceId} · ${state.selectedDate} ${formatUtcClock(s.start_time)}–${formatUtcClock(s.end_time)} UTC`;
+        el("runRaceBtn").disabled = false;
+      }
+
+      function renderSlots() {
+        const grid = el("slotsGrid");
+        const resource = state.resources.find((r) => r.id === state.selectedResourceId);
+        renderResourceMeta(resource);
+
+        if (!state.slots.length) {
+          grid.innerHTML = `<div class="empty-state">No slots returned for this resource and date.</div>`;
+          state.selectedRaceSlot = null;
+          updateRaceTargetDisplay();
+          return;
+        }
+
+        const firstFree = state.slots.find((s) => s.status === "FREE") || null;
+        if (
+          !state.selectedRaceSlot ||
+          !state.slots.some(
+            (s) => s.start_time === state.selectedRaceSlot.start_time && s.status === "FREE"
+          )
+        ) {
+          state.selectedRaceSlot = firstFree;
+        }
+        updateRaceTargetDisplay();
+
+        const priceText = resource ? formatCents((resource.hourly_rate_cents * resource.slot_duration_minutes) / 60) : "";
+
+        grid.innerHTML = state.slots
+          .map((slot, idx) => {
+            const label = `${formatUtcClock(slot.start_time)}–${formatUtcClock(slot.end_time)} UTC`;
+            const badgeClass =
+              slot.status === "FREE"
+                ? "badge-free"
+                : slot.status === "HOLD"
+                  ? "badge-hold"
+                  : slot.status === "CONFIRMED"
+                    ? "badge-confirmed"
+                    : "badge-past";
+            const isRaceSelected =
+              state.selectedRaceSlot && state.selectedRaceSlot.start_time === slot.start_time;
+
+            let actionsHtml = "";
+            if (slot.status === "FREE") {
+              actionsHtml = `
+                <button type="button" class="btn btn-primary btn-sm" data-action="book" data-idx="${idx}">Book Hold</button>
+                <button type="button" class="btn btn-sm" data-action="select-race" data-idx="${idx}">Target Race</button>
+              `;
+            } else if (slot.status === "HOLD") {
+              actionsHtml = `
+                <button type="button" class="btn btn-sky btn-sm" data-action="inspect-webhook" data-booking-id="${slot.booking_id}">Webhook Lab</button>
+                <button type="button" class="btn btn-rose btn-sm" data-action="cancel" data-booking-id="${slot.booking_id}">Cancel</button>
+              `;
+            } else if (slot.status === "CONFIRMED") {
+              actionsHtml = `
+                <button type="button" class="btn btn-rose btn-sm" data-action="cancel" data-booking-id="${slot.booking_id}">Cancel</button>
+              `;
+            } else {
+              actionsHtml = `<span style="font-size:11px;color:var(--text-muted);">Elapsed slot</span>`;
+            }
+
+            return `
+              <div class="slot-card status-${escapeHtml(slot.status)} ${isRaceSelected ? "selected-race" : ""}">
+                <div class="slot-top">
+                  <span class="slot-time">${escapeHtml(label)}</span>
+                  <span class="badge ${badgeClass}">${escapeHtml(slot.status)}</span>
+                </div>
+                <div class="slot-meta">
+                  <span>${slot.booking_id ? `Booking #${slot.booking_id}` : "Available window"}</span>
+                  <span class="tabular">${escapeHtml(priceText)}</span>
+                </div>
+                <div class="slot-actions">${actionsHtml}</div>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      async function discoverHoldBookings() {
+        const holds = [];
+        const seen = new Set();
+
+        for (const r of state.resources) {
+          const avRes = await apiFetch(
+            `/api/v1/resources/${r.id}/availability?date=${encodeURIComponent(state.selectedDate)}`
+          );
+          if (avRes.ok && avRes.data) {
+            if (r.id === state.selectedResourceId) {
+              state.slots = avRes.data.slots || [];
+            }
+            for (const s of avRes.data.slots || []) {
+              if (s.status === "HOLD" && s.booking_id && !seen.has(s.booking_id)) {
+                seen.add(s.booking_id);
+                holds.push({
+                  id: s.booking_id,
+                  label: `#${s.booking_id} · ${r.name} (${formatUtcClock(s.start_time)}–${formatUtcClock(s.end_time)} UTC)`,
+                });
+              }
+            }
+          }
+        }
+
+        if (state.token) {
+          const bkRes = await apiFetch("/api/v1/bookings?status=HOLD&limit=50");
+          if (bkRes.ok && bkRes.data && Array.isArray(bkRes.data.items)) {
+            for (const b of bkRes.data.items) {
+              if (!seen.has(b.id)) {
+                seen.add(b.id);
+                holds.push({
+                  id: b.id,
+                  label: `#${b.id} · Resource #${b.resource_id} (${b.start_time.slice(0, 10)} ${formatUtcClock(b.start_time)}–${formatUtcClock(b.end_time)} UTC)`,
+                });
+              }
+            }
+          }
+        }
+
+        state.holdBookings = holds;
+        const holdSelect = el("webhookHoldSelect");
+        const inputEl = el("webhookBookingIdInput");
+        if (!holds.length) {
+          holdSelect.innerHTML = `<option value="">No active HOLD bookings found</option>`;
+        } else {
+          holdSelect.innerHTML = holds
+            .map((h) => `<option value="${h.id}">${escapeHtml(h.label)}</option>`)
+            .join("");
+          if (!inputEl.value || !holds.some((h) => String(h.id) === String(inputEl.value))) {
+            inputEl.value = String(holds[0].id);
+            holdSelect.value = String(holds[0].id);
+          } else {
+            holdSelect.value = String(inputEl.value);
+          }
+        }
+      }
+
+      async function refreshTimelineAndBookings() {
+        if (!state.selectedResourceId) return;
+        await discoverHoldBookings();
+        renderSlots();
+        await Promise.all([loadMetrics(), loadOutbox()]);
+      }
+
+      async function loadOutbox() {
+        const res = await apiFetch("/api/v1/outbox/recent?limit=15");
+        if (!res.ok || !res.data) return;
+        const items = res.data.items || [];
+        const tbody = el("outboxTableBody");
+        if (!items.length) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">
+                No outbox events recorded yet.
+              </td>
+            </tr>
+          `;
+          return;
+        }
+        tbody.innerHTML = items
+          .map((item) => {
+            const st = item.status;
+            const cls =
+              st === "SENT" ? "badge-sent" : st === "FAILED" ? "badge-failed" : "badge-pending";
+            const summaryText = JSON.stringify(item.payload_summary || {});
+            return `
+              <tr>
+                <td class="tabular">#${item.id}</td>
+                <td class="tabular">#${item.booking_id}</td>
+                <td class="mono">${escapeHtml(item.event_type)}</td>
+                <td><span class="badge ${cls}">${escapeHtml(st)}</span></td>
+                <td class="tabular">${item.attempts}</td>
+                <td class="mono" style="max-width:260px;word-break:break-word;">${escapeHtml(summaryText)}</td>
+              </tr>
+            `;
+          })
+          .join("");
+      }
+
+      async function bookSingleSlot(slot) {
+        const authed = await ensureAuthenticatedMember();
+        if (!authed) return;
+        const res = await apiFetch("/api/v1/bookings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            resource_id: state.selectedResourceId,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+            notes: "Booked via SlotGuard Console",
+          }),
+        });
+        if (res.ok) {
+          el("webhookBookingIdInput").value = String(res.data.id);
+          state.signedEnvelope = null;
+          showBanner(
+            `Created HOLD booking #${res.data.id} (HTTP 201 · ${formatCents(res.data.total_price_cents)} · Request ID ${res.headers.get("x-request-id") || "-"})`,
+            "ok"
+          );
+        } else {
+          showBanner(
+            `Booking failed (HTTP ${res.status}): ${res.data?.detail || "Request rejected"} [request_id=${res.data?.request_id || "-"}]`,
+            "error"
+          );
+        }
+        await refreshTimelineAndBookings();
+      }
+
+      async function cancelBookingById(bookingId) {
+        const authed = await ensureAuthenticatedMember();
+        if (!authed) return;
+        const res = await apiFetch(`/api/v1/bookings/${bookingId}/cancel`, {
+          method: "POST",
+        });
+        if (res.ok) {
+          showBanner(`Cancelled booking #${bookingId} (slot released).`, "ok");
+        } else {
+          showBanner(
+            `Cancel rejected (HTTP ${res.status}): ${res.data?.detail || "Forbidden"} [request_id=${res.data?.request_id || "-"}]`,
+            "error"
+          );
+        }
+        await refreshTimelineAndBookings();
+      }
+
+      async function runRaceBurst25() {
+        if (!state.selectedRaceSlot) return;
+        const authed = await ensureAuthenticatedMember();
+        if (!authed) return;
+
+        const btn = el("runRaceBtn");
+        btn.disabled = true;
+        const target = state.selectedRaceSlot;
+        const payload = JSON.stringify({
+          resource_id: state.selectedResourceId,
+          start_time: target.start_time,
+          end_time: target.end_time,
+          notes: "25-request simultaneous race burst",
+        });
+
+        const t0 = performance.now();
+        const requests = Array.from({ length: 25 }, (_, i) =>
+          apiFetch("/api/v1/bookings", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Request-Id": `race-${Date.now()}-${String(i + 1).padStart(2, "0")}`,
+            },
+            body: payload,
+          })
+        );
+        const results = await Promise.all(requests);
+        const totalElapsed = performance.now() - t0;
+
+        let count201 = 0;
+        let count409 = 0;
+        let countOther = 0;
+        let winnerId = null;
+
+        const rowsHtml = results
+          .map((res, idx) => {
+            if (res.status === 201) {
+              count201 += 1;
+              winnerId = res.data?.id ?? winnerId;
+            } else if (res.status === 409) {
+              count409 += 1;
+            } else {
+              countOther += 1;
+            }
+
+            const badgeCls =
+              res.status === 201 ? "badge-free" : res.status === 409 ? "badge-conflict" : "badge-error";
+            const outcome =
+              res.status === 201
+                ? `HOLD #${res.data?.id} created`
+                : res.data?.detail || `HTTP ${res.status}`;
+            const reqId = res.headers.get("x-request-id") || res.data?.request_id || "-";
+            const rt = res.headers.get("x-response-time-ms") || "-";
+            const rlRem = res.headers.get("x-ratelimit-remaining") ?? "-";
+
+            return `
+              <tr>
+                <td class="tabular">${idx + 1}</td>
+                <td><span class="badge ${badgeCls}">${res.status}</span></td>
+                <td>${escapeHtml(outcome)}</td>
+                <td class="mono">${escapeHtml(reqId)}</td>
+                <td class="tabular">${escapeHtml(rt)}</td>
+                <td class="tabular">${escapeHtml(rlRem)}</td>
+              </tr>
+            `;
+          })
+          .join("");
+
+        el("race201").textContent = String(count201);
+        el("race409").textContent = String(count409);
+        el("raceOther").textContent = String(countOther);
+        el("raceDouble").textContent = String(Math.max(0, count201 - 1));
+        el("raceElapsed").textContent = `${totalElapsed.toFixed(1)} ms`;
+        el("raceTableBody").innerHTML = rowsHtml;
+
+        if (winnerId) {
+          el("webhookBookingIdInput").value = String(winnerId);
+          state.signedEnvelope = null;
+        }
+        showBanner(
+          `25-request burst complete in ${totalElapsed.toFixed(1)} ms: ${count201} x 201 HOLD Created, ${count409} x 409 Conflict Blocked, ${countOther} other.`,
+          count201 <= 1 && countOther === 0 ? "ok" : "info"
+        );
+        btn.disabled = false;
+        await refreshTimelineAndBookings();
+      }
+
+      async function signDemoWebhook() {
+        const bookingId = Number(el("webhookBookingIdInput").value);
+        if (!bookingId || bookingId < 1) {
+          showBanner("Enter or select a valid HOLD Booking ID first.", "error");
+          return null;
+        }
+        const provider = el("webhookProviderSelect").value;
+        const customEventId = el("webhookEventIdInput").value.trim() || null;
+
+        const res = await apiFetch("/api/v1/webhooks/demo-sign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            booking_id: bookingId,
+            provider,
+            event_id: customEventId,
+          }),
+        });
+        if (!res.ok) {
+          el("signedPreviewBox").textContent = JSON.stringify(res.data, null, 2);
+          showBanner(`Sign failed (${res.status}): ${res.data?.detail || "Error"}`, "error");
+          return null;
+        }
+
+        state.signedEnvelope = res.data;
+        el("webhookEventIdInput").value = res.data.event_id;
+        el("signedPreviewBox").textContent = JSON.stringify(
+          {
+            "X-Webhook-Timestamp": res.data.timestamp,
+            "X-Webhook-Signature": res.data.signature,
+            raw_body: res.data.raw_body,
+          },
+          null,
+          2
+        );
+        return res.data;
+      }
+
+      async function sendValidWebhook() {
+        const signed = state.signedEnvelope || (await signDemoWebhook());
+        if (!signed) return;
+
+        const res = await apiFetch("/api/v1/webhooks/payment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Webhook-Timestamp": signed.timestamp,
+            "X-Webhook-Signature": signed.signature,
+          },
+          body: signed.raw_body,
+        });
+        el("webhookResultBox").textContent = JSON.stringify(
+          {
+            http_status: res.status,
+            request_id: res.headers.get("x-request-id"),
+            response_time_ms: res.headers.get("x-response-time-ms"),
+            body: res.data,
+          },
+          null,
+          2
+        );
+        showBanner(
+          res.ok
+            ? `Webhook HTTP ${res.status}: ${res.data?.status} (booking ${res.data?.booking_status})`
+            : `Webhook HTTP ${res.status}: ${res.data?.detail || "Error"}`,
+          res.ok ? "ok" : "error"
+        );
+        await refreshTimelineAndBookings();
+      }
+
+      async function replayWebhook3x() {
+        const signed = state.signedEnvelope || (await signDemoWebhook());
+        if (!signed) return;
+
+        const deliveries = [];
+        for (let i = 1; i <= 3; i += 1) {
+          const res = await apiFetch("/api/v1/webhooks/payment", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Webhook-Timestamp": signed.timestamp,
+              "X-Webhook-Signature": signed.signature,
+              "X-Request-Id": `replay-${signed.event_id}-${i}`,
+            },
+            body: signed.raw_body,
+          });
+          deliveries.push({
+            attempt: i,
+            http_status: res.status,
+            status: res.data?.status,
+            booking_status: res.data?.booking_status,
+            request_id: res.headers.get("x-request-id"),
+            response_time_ms: res.headers.get("x-response-time-ms"),
+          });
+        }
+
+        el("webhookResultBox").textContent = JSON.stringify(
+          {
+            event_id: signed.event_id,
+            idempotent_3x_replay: deliveries,
+          },
+          null,
+          2
+        );
+        const all200 = deliveries.every((d) => d.http_status === 200);
+        showBanner(
+          all200
+            ? `3x idempotent replay verified: all 3 returned HTTP 200 OK with 1 confirmation total.`
+            : `3x replay completed with unexpected status.`,
+          all200 ? "ok" : "info"
+        );
+        await refreshTimelineAndBookings();
+      }
+
+      async function sendTamperedWebhook() {
+        const signed = state.signedEnvelope || (await signDemoWebhook());
+        if (!signed) return;
+
+        const tamperedSig = "sha256=" + "f".repeat(64);
+        const res = await apiFetch("/api/v1/webhooks/payment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Webhook-Timestamp": signed.timestamp,
+            "X-Webhook-Signature": tamperedSig,
+          },
+          body: signed.raw_body,
+        });
+        el("webhookResultBox").textContent = JSON.stringify(
+          {
+            http_status: res.status,
+            content_type: res.headers.get("content-type"),
+            request_id: res.headers.get("x-request-id"),
+            problem_detail: res.data,
+          },
+          null,
+          2
+        );
+        showBanner(
+          `Tampered signature rejected with HTTP ${res.status} RFC 7807 ProblemDetail (request_id=${res.data?.request_id || "-"}).`,
+          res.status === 401 ? "ok" : "error"
+        );
+        await loadMetrics();
+      }
+
+      // Wire events
+      el("loginMemberBtn").addEventListener("click", () => signInAs("MEMBER"));
+      el("loginOwnerBtn").addEventListener("click", () => signInAs("OWNER"));
+      el("logoutBtn").addEventListener("click", () => {
+        state.token = null;
+        state.user = null;
+        updateAuthUI();
+        refreshTimelineAndBookings();
+      });
+      el("dismissBannerBtn").addEventListener("click", hideBanner);
+
+      el("resourceSelect").addEventListener("change", (e) => {
+        state.selectedResourceId = Number(e.target.value);
+        refreshTimelineAndBookings();
+      });
+      el("dateInput").value = state.selectedDate;
+      el("dateInput").addEventListener("change", (e) => {
+        if (e.target.value) {
+          state.selectedDate = e.target.value;
+          refreshTimelineAndBookings();
+        }
+      });
+      el("refreshAllBtn").addEventListener("click", async () => {
+        await loadResources();
+        await refreshTimelineAndBookings();
+      });
+      el("refreshOutboxBtn").addEventListener("click", () => Promise.all([loadOutbox(), loadMetrics()]));
+
+      el("slotsGrid").addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+        const action = btn.dataset.action;
+        if (action === "book") {
+          const slot = state.slots[Number(btn.dataset.idx)];
+          if (slot) bookSingleSlot(slot);
+        } else if (action === "select-race") {
+          const slot = state.slots[Number(btn.dataset.idx)];
+          if (slot) {
+            state.selectedRaceSlot = slot;
+            renderSlots();
+          }
+        } else if (action === "inspect-webhook") {
+          const bookingId = btn.dataset.bookingId;
+          if (bookingId) {
+            el("webhookBookingIdInput").value = bookingId;
+            el("webhookHoldSelect").value = bookingId;
+            el("webhookEventIdInput").value = "";
+            state.signedEnvelope = null;
+            signDemoWebhook();
+          }
+        } else if (action === "cancel") {
+          const bookingId = Number(btn.dataset.bookingId);
+          if (bookingId) cancelBookingById(bookingId);
+        }
+      });
+
+      el("runRaceBtn").addEventListener("click", runRaceBurst25);
+
+      el("webhookHoldSelect").addEventListener("change", (e) => {
+        if (e.target.value) {
+          el("webhookBookingIdInput").value = e.target.value;
+          el("webhookEventIdInput").value = "";
+          state.signedEnvelope = null;
+        }
+      });
+      el("webhookBookingIdInput").addEventListener("input", () => {
+        state.signedEnvelope = null;
+      });
+      el("webhookProviderSelect").addEventListener("change", () => {
+        state.signedEnvelope = null;
+      });
+      el("signWebhookBtn").addEventListener("click", signDemoWebhook);
+      el("sendValidWebhookBtn").addEventListener("click", sendValidWebhook);
+      el("replayWebhook3xBtn").addEventListener("click", replayWebhook3x);
+      el("sendTamperedWebhookBtn").addEventListener("click", sendTamperedWebhook);
+
+      el("togglePollingBtn").addEventListener("click", () => {
+        state.pollingEnabled = !state.pollingEnabled;
+        el("pollingLabel").textContent = state.pollingEnabled ? "Live Poll: ON" : "Live Poll: PAUSED";
+        el("togglePollingBtn").setAttribute("aria-pressed", String(state.pollingEnabled));
+      });
+
+      async function bootstrap() {
+        updateAuthUI();
+        await loadHealth();
+        await loadResources();
+        await refreshTimelineAndBookings();
+        state.pollTimer = setInterval(() => {
+          if (state.pollingEnabled && document.visibilityState === "visible") {
+            loadMetrics();
+            loadOutbox();
+          }
+        }, 4000);
+      }
+
+      bootstrap();
+    })();
+  </script>
+</body>
+</html>
