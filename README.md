@@ -179,9 +179,9 @@ print(r.status_code, r.json())
 - **VS Code / IntelliJ HTTP Client:** [`docs/api-requests.http`](docs/api-requests.http)
 - **Postman Collection v2.1:** [`docs/postman_collection.json`](docs/postman_collection.json) (includes pre-request CryptoJS HMAC-SHA256 webhook signature generator)
 
-| Live OpenAPI & Health Probe (`GET /api/v1/health`) | Bookings & HMAC-SHA256 Webhook (`POST /webhooks/payment`) |
-| :---: | :---: |
-| ![OpenAPI Health Overview](docs/screenshots/openapi-overview.png) | ![OpenAPI Bookings & Webhooks](docs/screenshots/openapi-bookings-webhooks.png) |
+| Timeline & 25-Request Race Burst (`GET /`) | HMAC-SHA256 Signer, 3x Replay & Outbox Feed | Live OpenAPI & Health Probe (`/docs`) |
+| :---: | :---: | :---: |
+| ![Timeline & Race Burst Console](docs/screenshots/ops-timeline-concurrency.png) | ![Webhook Simulator & Outbox Feed](docs/screenshots/ops-webhook-outbox.png) | ![OpenAPI Health Overview](docs/screenshots/openapi-overview.png) |
 
 ---
 

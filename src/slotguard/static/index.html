@@ -628,13 +628,13 @@
       white-space: pre-wrap;
       word-break: break-word;
       margin: 0;
-      max-height: 220px;
+      max-height: 175px;
       overflow-y: auto;
     }
 
     .form-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
       gap: 10px;
     }
 
@@ -981,7 +981,7 @@
             </div>
             <div class="field">
               <label for="webhookEventIdInput">Event ID (optional)</label>
-              <input id="webhookEventIdInput" type="text" class="control-input mono" placeholder="Auto-generated on sign" />
+              <input id="webhookEventIdInput" type="text" class="control-input mono" placeholder="Auto on sign" />
             </div>
           </div>
 
@@ -1418,7 +1418,13 @@
             const st = item.status;
             const cls =
               st === "SENT" ? "badge-sent" : st === "FAILED" ? "badge-failed" : "badge-pending";
-            const summaryText = JSON.stringify(item.payload_summary || {});
+            const raw = item.payload_summary || {};
+            const summaryText =
+              raw.resource_id !== undefined && raw.start_time && raw.end_time
+                ? `booking #${raw.booking_id ?? item.booking_id} · res #${raw.resource_id} · ${String(raw.start_time).slice(11, 16)}-${String(raw.end_time).slice(11, 16)}Z`
+                : Object.entries(raw)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(" · ") || "—";
             return `
               <tr>
                 <td class="tabular">#${item.id}</td>
