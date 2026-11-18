@@ -1,0 +1,186 @@
+{
+  "info": {
+    "name": "SlotGuard Booking API",
+    "_postman_id": "2c85cf61-106e-439a-b73e-90f943fd7002",
+    "description": "Executable collection demonstrating resource slot availability, HOLD reservation, overlap conflict guard, automatic HMAC-SHA256 webhook signing, owner resource management, and booking cancellation.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8102" },
+    { "key": "memberToken", "value": "" },
+    { "key": "ownerToken", "value": "" },
+    { "key": "bookingId", "value": "3" },
+    { "key": "webhookSecret", "value": "dev-only-webhook-secret-change-me-in-production" },
+    { "key": "webhookTs", "value": "" },
+    { "key": "webhookSig", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Health Probe",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/health"
+      }
+    },
+    {
+      "name": "2. Member Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  if (data.access_token) { pm.collectionVariables.set('memberToken', data.access_token); }",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"member@slotguard.dev\",\n  \"password\": \"Member@1234\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login"
+      }
+    },
+    {
+      "name": "3. Check Daily Slot Availability",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/resources/1/availability?date=2026-12-10"
+      }
+    },
+    {
+      "name": "4. Create 15-Min HOLD Booking [14:00, 15:00)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "  const data = pm.response.json();",
+              "  if (data.id) { pm.collectionVariables.set('bookingId', String(data.id)); }",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{memberToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"resource_id\": 1,\n  \"start_time\": \"2026-12-10T14:00:00Z\",\n  \"end_time\": \"2026-12-10T15:00:00Z\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/bookings"
+      }
+    },
+    {
+      "name": "5. Overlap Conflict Guard (409 Expected)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{memberToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"resource_id\": 1,\n  \"start_time\": \"2026-12-10T14:30:00Z\",\n  \"end_time\": \"2026-12-10T15:30:00Z\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/bookings"
+      }
+    },
+    {
+      "name": "6. Signed Payment Webhook (Auto HMAC-SHA256)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const ts = Math.floor(Date.now() / 1000).toString();",
+              "const secret = pm.collectionVariables.get('webhookSecret');",
+              "const bookingId = pm.collectionVariables.get('bookingId') || '3';",
+              "const rawBody = pm.request.body.raw.replace('{{bookingId}}', bookingId);",
+              "pm.request.body.raw = rawBody;",
+              "const digest = CryptoJS.HmacSHA256(ts + '.' + rawBody, secret).toString(CryptoJS.enc.Hex);",
+              "pm.collectionVariables.set('webhookTs', ts);",
+              "pm.collectionVariables.set('webhookSig', 'sha256=' + digest);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Webhook-Timestamp", "value": "{{webhookTs}}" },
+          { "key": "X-Webhook-Signature", "value": "{{webhookSig}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"provider\":\"payos\",\"event_id\":\"evt_postman_001\",\"event_type\":\"payment.succeeded\",\"booking_id\":{{bookingId}},\"payment_reference\":\"PAY-003\",\"amount_cents\":5000}"
+        },
+        "url": "{{baseUrl}}/api/v1/webhooks/payment"
+      }
+    },
+    {
+      "name": "7. Owner Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  if (data.access_token) { pm.collectionVariables.set('ownerToken', data.access_token); }",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner@slotguard.dev\",\n  \"password\": \"Owner@1234\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login"
+      }
+    },
+    {
+      "name": "8. Owner Create Resource",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{ownerToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Podcast Room B\",\n  \"resource_type\": \"STUDIO\",\n  \"description\": \"Soundproof studio equipped with dual XLR mics\",\n  \"capacity\": 4,\n  \"hourly_rate_cents\": 3500,\n  \"open_time\": \"08:00:00\",\n  \"close_time\": \"20:00:00\",\n  \"slot_duration_minutes\": 60\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/resources"
+      }
+    },
+    {
+      "name": "9. Cancel Booking",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{memberToken}}" }],
+        "url": "{{baseUrl}}/api/v1/bookings/{{bookingId}}/cancel"
+      }
+    }
+  ]
+}

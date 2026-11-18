@@ -1,0 +1,87 @@
+### SlotGuard Booking API — VS Code REST Client / IntelliJ HTTP Requests
+@baseUrl = http://localhost:8102
+@memberEmail = member@slotguard.dev
+@memberPassword = Member@1234
+@ownerEmail = owner@slotguard.dev
+@ownerPassword = Owner@1234
+
+### 1. Health Probe
+GET {{baseUrl}}/api/v1/health
+
+### 2. Member Login (captures JWT access_token)
+# @name memberLogin
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{memberEmail}}",
+  "password": "{{memberPassword}}"
+}
+
+###
+@memberToken = {{memberLogin.response.body.$.access_token}}
+
+### 3. List Bookable Resources
+GET {{baseUrl}}/api/v1/resources
+
+### 4. Inspect Daily Slot Availability (Half-Open UTC Windows)
+GET {{baseUrl}}/api/v1/resources/1/availability?date=2026-12-10
+
+### 5. Reserve Time Slot [14:00, 15:00) UTC (15-min HOLD)
+# @name createBooking
+POST {{baseUrl}}/api/v1/bookings
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "resource_id": 1,
+  "start_time": "2026-12-10T14:00:00Z",
+  "end_time": "2026-12-10T15:00:00Z"
+}
+
+###
+@bookingId = {{createBooking.response.body.$.id}}
+
+### 6. Overlapping Double-Booking Conflict Guard (409 Conflict Expected)
+POST {{baseUrl}}/api/v1/bookings
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "resource_id": 1,
+  "start_time": "2026-12-10T14:30:00Z",
+  "end_time": "2026-12-10T15:30:00Z"
+}
+
+### 7. Owner Login (ROLE OWNER)
+# @name ownerLogin
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{ownerEmail}}",
+  "password": "{{ownerPassword}}"
+}
+
+###
+@ownerToken = {{ownerLogin.response.body.$.access_token}}
+
+### 8. Owner Creates a New Bookable Studio Resource
+POST {{baseUrl}}/api/v1/resources
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "name": "Podcast Room B",
+  "resource_type": "STUDIO",
+  "description": "Soundproof studio equipped with dual XLR mics",
+  "capacity": 4,
+  "hourly_rate_cents": 3500,
+  "open_time": "08:00:00",
+  "close_time": "20:00:00",
+  "slot_duration_minutes": 60
+}
+
+### 9. Cancel Active HOLD Booking
+POST {{baseUrl}}/api/v1/bookings/{{bookingId}}/cancel
+Authorization: Bearer {{memberToken}}
