@@ -34,3 +34,34 @@ jobs:
 
       - name: Run test suite
         run: pytest -v
+
+  docker-smoke:
+    needs: verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Compose configuration
+        run: docker compose config -q
+
+      - name: Start Postgres, Redis, and SlotGuard API
+        run: docker compose up -d --build
+
+      - name: Verify API health and Postgres/Redis backing stores
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8102/api/v1/health | grep -q '"status"'; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8102/api/v1/health
+          curl -fsS http://127.0.0.1:8102/api/v1/resources | grep -q '"items"'
+
+      - name: Tear down Compose stack
+        if: always()
+        run: |
+          docker compose logs api || true
+          docker compose down -v --remove-orphans

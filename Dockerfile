@@ -11,7 +11,12 @@ COPY alembic ./alembic
 COPY src ./src
 COPY scripts ./scripts
 
-RUN pip install --upgrade pip && pip install --no-cache-dir .
+RUN pip install --upgrade pip && pip install --no-cache-dir . \
+    && groupadd --system appgroup \
+    && useradd --system --gid appgroup --create-home appuser \
+    && chown -R appuser:appgroup /app
+
+USER appuser
 
 EXPOSE 8102
 
