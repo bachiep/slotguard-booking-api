@@ -20,4 +20,4 @@ USER appuser
 
 EXPOSE 8102
 
-CMD ["sh", "-c", "alembic upgrade head && uvicorn slotguard.main:app --host 0.0.0.0 --port 8102"]
+CMD ["sh", "-c", "alembic upgrade head && if [ \"${SEED_DEMO_ON_BOOT:-false}\" = \"true\" ]; then python -m scripts.seed_demo; fi && uvicorn slotguard.main:app --host 0.0.0.0 --port ${PORT:-8102}"]
