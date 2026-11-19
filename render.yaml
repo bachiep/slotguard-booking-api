@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: slotguard-booking-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: ENVIRONMENT
+        value: demo
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./slotguard_demo.db
+      - key: RATE_LIMIT_BACKEND
+        value: memory
+      - key: SEED_DEMO_ON_BOOT
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: WEBHOOK_SECRET
+        generateValue: true
