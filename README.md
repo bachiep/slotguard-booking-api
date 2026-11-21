@@ -206,11 +206,12 @@ print(r.status_code, r.json())
 | **Distinct-Slot Throughput** | `60` concurrent `POST /bookings` | `60 x 201 HOLD` across `5` resources | **31.2 req/s** | `1008.7` / `1715.53` / `1795.15 ms` |
 | **Identical Webhook Replays** | `30` concurrent `POST /webhooks/payment` | `30 x 200 OK` (`1 processed`, `29 already_processed`, `1` outbox row) | **37.4 req/s** | `481.36` / `729.23` / `733.22 ms` |
 
-### Measured Verification Summary (`54` Tests Passing, `0` Failures, `0` Skipped, `>= 80%` Coverage Gate)
+### Measured Verification Summary (`57` Tests Passing, `0` Failures, `0` Skipped, `80.73%` Coverage >= `80%` Gate)
 
 | Test Suite | Tests | What It Verifies |
 | :--- | :---: | :--- |
 | `tests/test_health_and_errors.py` | 4 | `/api/v1/health` DB readiness, RFC 7807 `ProblemDetail` responses, OpenAPI `BearerAuth` |
+| `tests/test_config_security.py` | 3 | Pydantic `@model_validator` rejecting placeholder/short `JWT_SECRET` and `WEBHOOK_SECRET` when `ENVIRONMENT=production` |
 | `tests/test_auth.py` | 6 | Argon2id hashing, register/duplicate `409`/login, `MutableClock` JWT expiry (`401`), refresh rotation & family revocation on reuse, logout, `OWNER`/`MEMBER` RBAC (`403`) |
 | `tests/test_resources.py` | 3 | `OWNER` resource CRUD vs `MEMBER` `403`, pagination & type filtering, daily availability across `HOLD`/`CONFIRMED`/`CANCELLED`/`EXPIRED` and elapsed slots |
 | `tests/test_bookings.py` | 5 | Adjacent intervals (`[09:00, 10:00)` + `[10:00, 11:00)`), partial/nested overlap `409`, 12-request `asyncio.gather` concurrency burst (`1 x 201`, `11 x 409`), slot alignment/past/hours `422`, ownership & pre-start cancellation |
