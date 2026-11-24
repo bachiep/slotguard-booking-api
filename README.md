@@ -200,6 +200,8 @@ print(r.status_code, r.json())
 
 ### Measured Load & Concurrency Benchmark Summary ([`docs/BENCHMARK.md`](docs/BENCHMARK.md))
 
+> Verified locally via Uvicorn + SQLite WAL (`python benchmarks/run_load_benchmark.py`) and executed live on every push/PR in CI `docker-smoke` (`--base-url http://127.0.0.1:8102`) against containerized PostgreSQL 16 (`SELECT ... FOR UPDATE`) + Redis 7 Lua rate limiting.
+
 | Scenario | Concurrency | Outcomes | Throughput | Client p50 / p95 / p99 |
 | :--- | :---: | :--- | :---: | :---: |
 | **Double-Booking Race Burst** | `100` concurrent `POST /bookings` | `1 x 201 HOLD`, `99 x 409 Conflict` (`0` double-bookings) | **59.1 req/s** | `933.53` / `1475.97` / `1595.2 ms` |

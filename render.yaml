@@ -5,7 +5,7 @@ services:
     plan: free
     healthCheckPath: /api/v1/health
     envVars:
-      - key: ENVIRONMENT
+      - key: APP_ENV
         value: demo
       - key: DATABASE_URL
         value: sqlite+aiosqlite:///./slotguard_demo.db

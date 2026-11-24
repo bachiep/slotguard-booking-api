@@ -18,8 +18,6 @@ from pathlib import Path
 
 import httpx
 
-from slotguard.core.database import create_engine_and_sessionmaker
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -102,6 +100,8 @@ async def _wait_for_health(client: httpx.AsyncClient, timeout_seconds: float = 1
 
 async def _prepare_database(database_url: str) -> None:
     from scripts.seed_demo import seed_demo_data
+
+    from slotguard.core.database import create_engine_and_sessionmaker
 
     env = os.environ.copy()
     env["DATABASE_URL"] = database_url
@@ -394,10 +394,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run SlotGuard v2 load and concurrency benchmarks."
     )
+    parser.add_argument(
+        "--base-url",
+        default="",
+        help="Run against an already-running SlotGuard API URL instead of ephemeral SQLite.",
+    )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON output.")
     args = parser.parse_args()
 
-    report = asyncio.run(run_suite())
+    if args.base_url:
+        report = asyncio.run(_run_benchmarks(args.base_url))
+    else:
+        report = asyncio.run(run_suite())
     if args.json:
         print(json.dumps(report, indent=2))
     else:
