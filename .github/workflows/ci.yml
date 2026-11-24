@@ -47,6 +47,11 @@ jobs:
         run: docker compose config -q
 
       - name: Start Postgres, Redis, and SlotGuard API
+        env:
+          SEED_DEMO_ON_BOOT: "true"
+          RATE_LIMIT_AUTH_REQUESTS: "200"
+          RATE_LIMIT_BOOKING_REQUESTS: "500"
+          RATE_LIMIT_WEBHOOK_REQUESTS: "200"
         run: docker compose up -d --build
 
       - name: Verify API health and Postgres/Redis backing stores
@@ -59,6 +64,11 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8102/api/v1/health
           curl -fsS http://127.0.0.1:8102/api/v1/resources | grep -q '"items"'
+
+      - name: Run 100-request double-booking & 30x HMAC replay benchmark on Postgres 16 + Redis 7
+        run: |
+          python3 -m pip install --quiet httpx
+          python3 benchmarks/run_load_benchmark.py --base-url http://127.0.0.1:8102
 
       - name: Tear down Compose stack
         if: always()

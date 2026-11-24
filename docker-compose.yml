@@ -46,6 +46,10 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-slotguard}:${POSTGRES_PASSWORD:-change-me-in-local-docker-env}@postgres:5432/${POSTGRES_DB:-slotguard}
       RATE_LIMIT_BACKEND: redis
       REDIS_URL: redis://redis:6379/0
+      SEED_DEMO_ON_BOOT: ${SEED_DEMO_ON_BOOT:-false}
+      RATE_LIMIT_AUTH_REQUESTS: ${RATE_LIMIT_AUTH_REQUESTS:-20}
+      RATE_LIMIT_BOOKING_REQUESTS: ${RATE_LIMIT_BOOKING_REQUESTS:-60}
+      RATE_LIMIT_WEBHOOK_REQUESTS: ${RATE_LIMIT_WEBHOOK_REQUESTS:-100}
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-before-production-use-at-least-32-chars}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-only-webhook-secret-change-me-in-production}
     ports:
